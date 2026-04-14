@@ -28,6 +28,9 @@
             margin: 0 0 6px; 
             color: #1a1a1a; 
             font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
         }
         h2 { 
             font-size: 20px; 
@@ -39,6 +42,24 @@
             color: #666; 
             margin-bottom: 16px; 
             font-size: 14px; 
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .save-badge {
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .save-badge.saving {
+            background: #fff3e0;
+            color: #e65100;
         }
         input, button, select, textarea { 
             width: 100%; 
@@ -85,6 +106,25 @@
             margin: 0; 
             min-height: 40px;
         }
+        button.outline {
+            background: transparent;
+            color: #0066cc;
+            border: 1px solid #0066cc;
+            min-height: 40px;
+        }
+        button.outline:active {
+            background: #f0f7ff;
+        }
+        
+        #saveExpenseBtn {
+            background: #f0f0f0;
+            color: #1a1a1a;
+            border: 1px solid #ddd;
+        }
+        #saveExpenseBtn:active {
+            background: #e0e0e0;
+        }
+        
         .expense-item { 
             background: #f9f9f9; 
             padding: 14px; 
@@ -119,7 +159,7 @@
             min-height: 48px;
         }
         .split-mode-tabs button.active { 
-            background: #0066cc; 
+            background: #4a90d9;
             color: white; 
         }
         .result-line { 
@@ -150,20 +190,44 @@
         .btn-group button { 
             flex: 1; 
         }
-        .delete-btn { 
-            background: #ff4444; 
-            color: white; 
+        .expense-actions {
+            display: flex;
+            gap: 8px;
+            margin-left: 8px;
+        }
+        
+        .edit-btn { 
+            background: #e3f2fd; 
+            color: #1976d2; 
             border: none; 
             border-radius: 20px; 
             padding: 6px 14px; 
             font-size: 13px; 
+            font-weight: 500;
+            cursor: pointer; 
+            width: auto; 
+            min-height: 36px;
+        }
+        .edit-btn:active {
+            background: #bbdefb;
+        }
+        
+        .delete-btn { 
+            background: #ffebee; 
+            color: #c62828; 
+            border: none; 
+            border-radius: 20px; 
+            padding: 6px 14px; 
+            font-size: 13px; 
+            font-weight: 500;
             cursor: pointer; 
             width: auto; 
             min-height: 36px;
         }
         .delete-btn:active {
-            background: #cc0000;
+            background: #ffcdd2;
         }
+        
         hr { 
             margin: 20px 0; 
             border: none; 
@@ -196,7 +260,6 @@
         .category-購物 { background: #FFCDD2; color: #B71C1C; }
         .category-其他 { background: #E0E0E0; color: #424242; }
         
-        /* 表格手機優化 */
         .table-wrapper {
             overflow-x: auto;
             margin: 15px 0;
@@ -283,7 +346,6 @@
             align-items: center;
         }
         
-        /* 雙列表單手機優化 */
         .form-grid {
             display: flex;
             flex-direction: column;
@@ -297,37 +359,57 @@
             }
         }
         
-        /* Checkbox 容器手機優化 */
-        .member-checkbox-container {
+        .member-tag-container {
             display: flex;
             flex-wrap: wrap;
-            gap: 8px;
+            gap: 10px;
             margin: 12px 0;
         }
-        .member-checkbox-container label {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .member-tag {
             background: #f0f0f0;
-            padding: 10px 16px;
-            border-radius: 24px;
-            font-size: 15px;
+            color: #1a1a1a;
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+            border: 2px solid transparent;
             flex: 0 1 auto;
+            text-align: center;
+            min-width: 70px;
         }
-        .member-checkbox-container input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            margin: 0;
-            padding: 0;
-            min-height: auto;
+        .member-tag.selected {
+            background: #4a90d9;
+            color: white;
+            border-color: #4a90d9;
+        }
+        .member-tag:active {
+            transform: scale(0.96);
         }
         
-        /* 日期輸入優化 */
+        .select-all-btn {
+            background: #e8f0fe;
+            color: #0066cc;
+            border: 1px dashed #0066cc;
+            padding: 10px 16px;
+            border-radius: 30px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .select-all-btn:active {
+            background: #d0e2ff;
+        }
+        
         input[type="date"] {
             min-height: 52px;
         }
         
-        /* 數字輸入去掉 spinner */
         input[type="number"]::-webkit-inner-spin-button,
         input[type="number"]::-webkit-outer-spin-button {
             -webkit-appearance: none;
@@ -338,16 +420,6 @@
             appearance: textfield;
         }
         
-        /* 使列表項目易於點擊 */
-        .expense-item {
-            position: relative;
-        }
-        .expense-item .delete-btn {
-            position: relative;
-            z-index: 2;
-        }
-        
-        /* 結果區域字體調整 */
         #resultArea {
             font-size: 15px;
             word-break: break-word;
@@ -356,14 +428,49 @@
             font-size: 18px;
             margin: 20px 0 12px;
         }
+
+        .advanced-menu {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        .advanced-menu button {
+            flex: 1;
+            min-width: 100px;
+        }
+
+        #importFileInput {
+            display: none;
+        }
+        
+        .editing-mode {
+            border: 2px solid #4a90d9;
+        }
+        
+        .cancel-edit-btn {
+            background: #999;
+            margin-top: 8px;
+        }
+        
+        .participants-list {
+            font-size: 14px;
+            color: #444;
+            margin-top: 4px;
+            padding: 4px 0;
+        }
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>🧳 旅行夾錢計數機</h1>
-        <div class="sub">無廣告 · 支援分類統計 · 完整總結表</div>
+        <h1>
+            🧳 旅行夾錢計數機
+        </h1>
+        <div class="sub">
+            <span>自動儲存 · 完整總結表</span>
+            <span id="saveStatus" class="save-badge">✅ 已儲存</span>
+        </div>
 
-        <!-- Step 1: 朋友名單 + 行程設定 -->
         <label>👥 團友名單 (用逗號分隔)</label>
         <input type="text" id="memberInput" placeholder="例如: A, B, C, D" value="A, B, C, D" inputmode="text" enterkeyhint="done">
         
@@ -390,9 +497,8 @@
         <button onclick="updateMemberList()">更新設定</button>
     </div>
 
-    <!-- Step 2: 新增消費 -->
-    <div class="card">
-        <h2 style="margin-top: 0;">➕ 新增消費</h2>
+    <div class="card" id="expenseFormCard">
+        <h2 style="margin-top: 0;" id="formTitle">➕ 新增消費</h2>
         
         <div class="form-grid">
             <div>
@@ -435,11 +541,11 @@
         <div id="splitArea"></div>
         <div id="splitTotalHint" class="total-hint"></div>
         
-        <button onclick="addExpense()">➕ 新增消費記錄</button>
+        <button onclick="saveExpense()" id="saveExpenseBtn">➕ 新增消費記錄</button>
+        <button class="secondary cancel-edit-btn" id="cancelEditBtn" onclick="cancelEdit()" style="display: none;">取消編輯</button>
         
         <hr>
         
-        <!-- 消費列表 + 篩選 -->
         <div class="filter-bar">
             <select id="filterCategory" onchange="renderExpenseList()">
                 <option value="全部">全部類別</option>
@@ -462,29 +568,329 @@
         <div id="expenseList"></div>
     </div>
 
-    <!-- Step 3: 總結表 -->
     <div class="card">
         <div class="btn-group">
             <button onclick="generateFullReport()">📊 生成完整總結表</button>
-            <button class="secondary" onclick="exportToExcel()">📥 匯出 Excel (CSV)</button>
-            <button class="secondary" onclick="resetAll()">🔄 重設全部</button>
+            <button class="secondary" onclick="exportToExcel()">📥 匯出 Excel</button>
+            <button class="secondary" onclick="resetExpenses()">🔄 重設消費</button>
         </div>
+        
+        <div class="advanced-menu">
+            <button class="outline small" onclick="exportBackup()">💾 匯出備份</button>
+            <button class="outline small" onclick="document.getElementById('importFileInput').click()">📂 匯入備份</button>
+            <button class="outline small" onclick="clearAllData()" style="color: #c62828; border-color: #c62828;">🗑️ 清除全部</button>
+        </div>
+        
+        <input type="file" id="importFileInput" accept=".json,application/json" onchange="importBackup(event)">
+        
         <div id="resultArea" style="margin-top: 20px;"></div>
     </div>
 
     <script>
+        const STORAGE_KEY = 'travelSplitApp';
+        
         let members = ['A', 'B', 'C', 'D'];
         let expenses = [];
         let currentSplitMode = 'equal';
         let customAmounts = {};
+        let saveTimeout = null;
+        let editingExpenseId = null;
 
-        // 初始化日期
+        function showSavingStatus(saving = true) {
+            const badge = document.getElementById('saveStatus');
+            if (saving) {
+                badge.className = 'save-badge saving';
+                badge.innerHTML = '💾 儲存中...';
+            } else {
+                badge.className = 'save-badge';
+                badge.innerHTML = '✅ 已儲存';
+            }
+        }
+
+        function autoSave() {
+            showSavingStatus(true);
+            
+            if (saveTimeout) clearTimeout(saveTimeout);
+            
+            saveTimeout = setTimeout(() => {
+                const data = {
+                    members,
+                    expenses,
+                    tripStartDate: document.getElementById('tripStartDate').value,
+                    tripEndDate: document.getElementById('tripEndDate').value,
+                    currency: document.getElementById('currencySelect').value,
+                    lastSaved: new Date().toISOString()
+                };
+                
+                try {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+                    showSavingStatus(false);
+                } catch (e) {
+                    console.error('儲存失敗:', e);
+                }
+                
+                saveTimeout = null;
+            }, 300);
+        }
+
+        function loadSavedData() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (!saved) return false;
+                
+                const data = JSON.parse(saved);
+                
+                if (data.members && data.members.length > 0) {
+                    members = data.members;
+                    document.getElementById('memberInput').value = members.join(', ');
+                }
+                
+                if (data.expenses && data.expenses.length > 0) {
+                    expenses = data.expenses;
+                }
+                
+                if (data.tripStartDate) {
+                    document.getElementById('tripStartDate').value = data.tripStartDate;
+                }
+                
+                if (data.tripEndDate) {
+                    document.getElementById('tripEndDate').value = data.tripEndDate;
+                }
+                
+                if (data.currency) {
+                    document.getElementById('currencySelect').value = data.currency;
+                }
+                
+                showSavingStatus(false);
+                return true;
+            } catch (e) {
+                console.error('載入失敗:', e);
+                return false;
+            }
+        }
+
+        function resetExpenses() {
+            if (confirm('確定要重設所有消費記錄嗎？\n\n團友名單同日期設定會保留。')) {
+                expenses = [];
+                document.getElementById('resultArea').innerHTML = '';
+                customAmounts = {};
+                updateFilterDate();
+                cancelEdit();
+                renderExpenseList();
+                autoSave();
+            }
+        }
+
+        function clearAllData() {
+            if (confirm('確定要清除全部資料嗎？\n\n所有消費記錄、團友名單、日期同貨幣設定都會被刪除。\n\n呢個動作唔可以還原！')) {
+                localStorage.removeItem(STORAGE_KEY);
+                expenses = [];
+                members = ['A', 'B', 'C', 'D'];
+                document.getElementById('memberInput').value = 'A, B, C, D';
+                
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('tripStartDate').value = today;
+                
+                const nextWeek = new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0];
+                document.getElementById('tripEndDate').value = nextWeek;
+                
+                document.getElementById('currencySelect').value = 'HKD';
+                document.getElementById('resultArea').innerHTML = '';
+                
+                cancelEdit();
+                renderUI();
+                showSavingStatus(false);
+            }
+        }
+
+        function exportBackup() {
+            const data = {
+                members,
+                expenses,
+                tripStartDate: document.getElementById('tripStartDate').value,
+                tripEndDate: document.getElementById('tripEndDate').value,
+                currency: document.getElementById('currencySelect').value,
+                exportDate: new Date().toISOString()
+            };
+            
+            const dataStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `旅行分賬備份_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function importBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    
+                    if (data.members) {
+                        members = data.members;
+                        document.getElementById('memberInput').value = members.join(', ');
+                    }
+                    
+                    if (data.expenses) {
+                        expenses = data.expenses;
+                    }
+                    
+                    if (data.tripStartDate) {
+                        document.getElementById('tripStartDate').value = data.tripStartDate;
+                    }
+                    
+                    if (data.tripEndDate) {
+                        document.getElementById('tripEndDate').value = data.tripEndDate;
+                    }
+                    
+                    if (data.currency) {
+                        document.getElementById('currencySelect').value = data.currency;
+                    }
+                    
+                    cancelEdit();
+                    renderUI();
+                    autoSave();
+                    alert('✅ 備份匯入成功！');
+                } catch (err) {
+                    alert('❌ 檔案格式錯誤，請選擇正確嘅備份檔案');
+                }
+            };
+            reader.readAsText(file);
+            
+            event.target.value = '';
+        }
+
         const today = new Date().toISOString().split('T')[0];
         document.getElementById('expenseDate').value = today;
-        document.getElementById('tripStartDate').value = today;
         
-        const nextWeek = new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0];
-        document.getElementById('tripEndDate').value = nextWeek;
+        if (!loadSavedData()) {
+            document.getElementById('tripStartDate').value = today;
+            const nextWeek = new Date(Date.now() + 7*24*60*60*1000).toISOString().split('T')[0];
+            document.getElementById('tripEndDate').value = nextWeek;
+        }
+
+        function editExpense(id) {
+            const expense = expenses.find(e => e.id === id);
+            if (!expense) return;
+            
+            editingExpenseId = id;
+            
+            document.getElementById('payerSelect').value = expense.payer;
+            document.getElementById('amountInput').value = expense.amount;
+            document.getElementById('expenseDate').value = expense.date;
+            document.getElementById('categorySelect').value = expense.category;
+            document.getElementById('descInput').value = expense.desc;
+            
+            currentSplitMode = expense.splitMode;
+            setSplitMode(currentSplitMode);
+            
+            if (expense.splitMode === 'custom') {
+                customAmounts = { ...expense.splitDetails };
+            }
+            
+            document.getElementById('formTitle').innerHTML = '✏️ 編輯消費';
+            document.getElementById('saveExpenseBtn').innerHTML = '💾 儲存修改';
+            document.getElementById('cancelEditBtn').style.display = 'block';
+            document.getElementById('expenseFormCard').classList.add('editing-mode');
+            
+            renderSplitArea();
+            document.getElementById('expenseFormCard').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function cancelEdit() {
+            editingExpenseId = null;
+            
+            document.getElementById('amountInput').value = '';
+            document.getElementById('descInput').value = '';
+            document.getElementById('expenseDate').value = today;
+            document.getElementById('categorySelect').value = '餐飲';
+            customAmounts = {};
+            
+            document.getElementById('formTitle').innerHTML = '➕ 新增消費';
+            document.getElementById('saveExpenseBtn').innerHTML = '➕ 新增消費記錄';
+            document.getElementById('cancelEditBtn').style.display = 'none';
+            document.getElementById('expenseFormCard').classList.remove('editing-mode');
+            
+            setSplitMode('equal');
+            renderSplitArea();
+        }
+
+        function saveExpense() {
+            const payer = document.getElementById('payerSelect').value;
+            const amount = parseFloat(document.getElementById('amountInput').value);
+            const desc = document.getElementById('descInput').value || '消費';
+            const date = document.getElementById('expenseDate').value;
+            const category = document.getElementById('categorySelect').value;
+            const currency = document.getElementById('currencySelect').value;
+            
+            if (isNaN(amount) || amount <= 0) {
+                alert('請輸入有效金額');
+                return;
+            }
+
+            let sharedWith = [];
+            let splitDetails = {};
+
+            if (currentSplitMode === 'equal') {
+                const selectedTags = document.querySelectorAll('.member-tag.selected');
+                selectedTags.forEach(tag => sharedWith.push(tag.dataset.member));
+
+                if (sharedWith.length === 0) {
+                    alert('請至少選擇一位參與分賬嘅團友');
+                    return;
+                }
+                
+                const perPerson = amount / sharedWith.length;
+                sharedWith.forEach(m => { splitDetails[m] = perPerson; });
+            } else {
+                let totalCustom = 0;
+                members.forEach(m => {
+                    const val = customAmounts[m] || 0;
+                    if (val > 0) {
+                        sharedWith.push(m);
+                        splitDetails[m] = val;
+                        totalCustom += val;
+                    }
+                });
+
+                if (sharedWith.length === 0) {
+                    alert('請至少為一位團友輸入大於 0 嘅金額');
+                    return;
+                }
+
+                if (Math.abs(totalCustom - amount) > 0.01) {
+                    alert(`自訂金額總計 ${currency} $${totalCustom.toFixed(2)} 同總金額不符，請調整`);
+                    return;
+                }
+            }
+
+            const expenseData = {
+                payer, amount, desc, date, category, currency,
+                sharedWith, splitDetails,
+                splitMode: currentSplitMode,
+                id: editingExpenseId || Date.now() + Math.random()
+            };
+
+            if (editingExpenseId) {
+                const index = expenses.findIndex(e => e.id === editingExpenseId);
+                if (index !== -1) {
+                    expenses[index] = expenseData;
+                }
+            } else {
+                expenses.push(expenseData);
+            }
+
+            cancelEdit();
+            updateFilterDate();
+            renderExpenseList();
+            autoSave();
+        }
 
         function renderUI() {
             updateMemberSelect();
@@ -499,6 +905,7 @@
             members = input.split(',').map(s => s.trim()).filter(s => s !== '');
             if (members.length === 0) members = ['A', 'B', 'C', 'D'];
             renderUI();
+            autoSave();
         }
 
         function updateMemberSelect() {
@@ -550,25 +957,49 @@
             renderSplitArea();
         }
 
+        function selectAllMembers() {
+            document.querySelectorAll('.member-tag').forEach(tag => {
+                tag.classList.add('selected');
+            });
+            updateSplitPreview();
+        }
+
         function renderSplitArea() {
             const container = document.getElementById('splitArea');
             const amount = parseFloat(document.getElementById('amountInput').value) || 0;
             
             if (currentSplitMode === 'equal') {
-                let html = '<div style="margin-top: 8px;"><strong>選擇參與分賬嘅團友：</strong></div>';
-                html += '<div class="member-checkbox-container">';
+                let html = '<div style="margin-top: 8px;"><strong>點擊選擇參與分賬嘅團友：</strong></div>';
+                
+                html += '<div class="select-all-btn" onclick="selectAllMembers()">👥 全部人平均分</div>';
+                
+                html += '<div class="member-tag-container">';
+                
+                let selectedMembers = [];
+                if (editingExpenseId) {
+                    const expense = expenses.find(e => e.id === editingExpenseId);
+                    if (expense && expense.splitMode === 'equal') {
+                        selectedMembers = expense.sharedWith;
+                    }
+                }
+                
                 members.forEach(m => {
-                    html += `<label>
-                        <input type="checkbox" value="${m}" class="equal-participant" checked> ${m}
-                    </label>`;
+                    // 編輯模式跟返之前選擇，新增模式預設唔選中
+                    const isSelected = editingExpenseId ? selectedMembers.includes(m) : false;
+                    html += `<div class="member-tag ${isSelected ? 'selected' : ''}" data-member="${m}" onclick="toggleMemberTag(this)">${m}</div>`;
                 });
                 html += '</div>';
                 
                 if (amount > 0) {
-                    const checkedCount = members.length;
-                    const perPerson = amount / checkedCount;
-                    const currency = document.getElementById('currencySelect').value;
-                    html += `<div class="total-hint">💰 總金額 ${currency} $${amount.toFixed(2)}，每人 ${currency} $${perPerson.toFixed(2)} (${checkedCount}人)</div>`;
+                    const selectedCount = document.querySelectorAll('.member-tag.selected').length;
+                    if (selectedCount > 0) {
+                        const perPerson = amount / selectedCount;
+                        const currency = document.getElementById('currencySelect').value;
+                        html += `<div class="total-hint" id="equalSplitHint">💰 總金額 ${currency} $${amount.toFixed(2)}，每人 ${currency} $${perPerson.toFixed(2)} (${selectedCount}人)</div>`;
+                    } else {
+                        const currency = document.getElementById('currencySelect').value;
+                        html += `<div class="total-hint" id="equalSplitHint" style="color: #c62828;">⚠️ 請選擇至少一位團友</div>`;
+                    }
                 }
                 
                 container.innerHTML = html;
@@ -593,9 +1024,28 @@
             }
         }
 
+        function toggleMemberTag(tag) {
+            tag.classList.toggle('selected');
+            updateSplitPreview();
+        }
+
         function updateSplitPreview() {
             if (currentSplitMode === 'equal') {
-                renderSplitArea();
+                const amount = parseFloat(document.getElementById('amountInput').value) || 0;
+                const hint = document.getElementById('equalSplitHint');
+                if (hint) {
+                    const selectedCount = document.querySelectorAll('.member-tag.selected').length;
+                    if (selectedCount > 0 && amount > 0) {
+                        const perPerson = amount / selectedCount;
+                        const currency = document.getElementById('currencySelect').value;
+                        hint.innerHTML = `💰 總金額 ${currency} $${amount.toFixed(2)}，每人 ${currency} $${perPerson.toFixed(2)} (${selectedCount}人)`;
+                        hint.style.color = '#666';
+                    } else if (selectedCount === 0) {
+                        const currency = document.getElementById('currencySelect').value;
+                        hint.innerHTML = `⚠️ 請選擇至少一位團友`;
+                        hint.style.color = '#c62828';
+                    }
+                }
             }
         }
 
@@ -632,75 +1082,18 @@
             }
         }
 
-        function addExpense() {
-            const payer = document.getElementById('payerSelect').value;
-            const amount = parseFloat(document.getElementById('amountInput').value);
-            const desc = document.getElementById('descInput').value || '消費';
-            const date = document.getElementById('expenseDate').value;
-            const category = document.getElementById('categorySelect').value;
-            const currency = document.getElementById('currencySelect').value;
-            
-            if (isNaN(amount) || amount <= 0) {
-                alert('請輸入有效金額');
-                return;
-            }
-
-            let sharedWith = [];
-            let splitDetails = {};
-
-            if (currentSplitMode === 'equal') {
-                const checkboxes = document.querySelectorAll('.equal-participant');
-                checkboxes.forEach(cb => { if (cb.checked) sharedWith.push(cb.value); });
-
-                if (sharedWith.length === 0) {
-                    alert('請至少選擇一位參與分賬嘅團友');
-                    return;
+        function deleteExpense(id) {
+            if (confirm('確定要刪除呢筆消費嗎？')) {
+                expenses = expenses.filter(e => e.id !== id);
+                
+                if (editingExpenseId === id) {
+                    cancelEdit();
                 }
                 
-                const perPerson = amount / sharedWith.length;
-                sharedWith.forEach(m => { splitDetails[m] = perPerson; });
-            } else {
-                let totalCustom = 0;
-                members.forEach(m => {
-                    const val = customAmounts[m] || 0;
-                    if (val > 0) {
-                        sharedWith.push(m);
-                        splitDetails[m] = val;
-                        totalCustom += val;
-                    }
-                });
-
-                if (sharedWith.length === 0) {
-                    alert('請至少為一位團友輸入大於 0 嘅金額');
-                    return;
-                }
-
-                if (Math.abs(totalCustom - amount) > 0.01) {
-                    alert(`自訂金額總計 ${currency} $${totalCustom.toFixed(2)} 同總金額不符，請調整`);
-                    return;
-                }
+                updateFilterDate();
+                renderExpenseList();
+                autoSave();
             }
-
-            expenses.push({
-                payer, amount, desc, date, category, currency,
-                sharedWith, splitDetails,
-                splitMode: currentSplitMode,
-                id: Date.now() + Math.random()
-            });
-
-            document.getElementById('amountInput').value = '';
-            document.getElementById('descInput').value = '';
-            customAmounts = {};
-            setSplitMode('equal');
-            
-            updateFilterDate();
-            renderExpenseList();
-        }
-
-        function deleteExpense(id) {
-            expenses = expenses.filter(e => e.id !== id);
-            updateFilterDate();
-            renderExpenseList();
         }
 
         function renderExpenseList() {
@@ -725,7 +1118,6 @@
                 return;
             }
 
-            // 按日期排序（最新在前）
             filteredExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
             
             let html = `<h3>📋 消費記錄 (${filteredExpenses.length} 筆)</h3>`;
@@ -759,10 +1151,14 @@
                             <strong style="font-size: 16px;">${e.desc}</strong>
                             <span class="category-badge category-${e.category}">${e.category}</span>
                         </div>
-                        <button class="delete-btn" onclick="deleteExpense(${e.id})">刪除</button>
+                        <div class="expense-actions">
+                            <button class="edit-btn" onclick="editExpense(${e.id})">✏️ 編輯</button>
+                            <button class="delete-btn" onclick="deleteExpense(${e.id})">🗑️ 刪除</button>
+                        </div>
                     </div>
                     <div style="margin-top: 8px;">💸 ${e.payer} 俾咗 ${e.currency} $${e.amount.toFixed(2)}</div>
-                    <div class="split-summary">👥 ${splitDesc}</div>
+                    <div class="participants-list">👥 同 ${e.sharedWith.join('、')} 分</div>
+                    <div class="split-summary">📊 ${splitDesc}</div>
                 </div>`;
             });
             
@@ -777,11 +1173,9 @@
 
             const currency = expenses[0].currency;
             
-            // 計算每人結餘
             const balance = {};
             members.forEach(m => balance[m] = 0);
 
-            // 分類統計
             const categoryTotal = {};
             const dailyTotal = {};
             
@@ -791,16 +1185,12 @@
                     balance[person] -= e.splitDetails[person];
                 });
                 
-                // 分類統計
                 categoryTotal[e.category] = (categoryTotal[e.category] || 0) + e.amount;
-                
-                // 每日統計
                 dailyTotal[e.date] = (dailyTotal[e.date] || 0) + e.amount;
             });
 
             const totalExpense = Object.values(categoryTotal).reduce((a, b) => a + b, 0);
 
-            // 計算還款方案
             const creditors = [];
             const debtors = [];
             
@@ -835,7 +1225,6 @@
                 if (creditor.amount < 0.001) j++;
             }
 
-            // 生成完整報告
             const resultDiv = document.getElementById('resultArea');
             let html = `
                 <div class="summary-box">
@@ -912,7 +1301,6 @@
                 html += `</table></div>`;
             }
             
-            // 每日消費趨勢
             html += `<h3>📅 每日消費趨勢</h3>`;
             html += `<div class="table-wrapper"><table><tr><th>日期</th><th>消費筆數</th><th>總金額</th></tr>`;
             
@@ -938,7 +1326,7 @@
 
             const currency = expenses[0].currency;
             
-            let csv = '\uFEFF'; // UTF-8 BOM for Excel
+            let csv = '\uFEFF';
             
             csv += '=== 旅行基本資料 ===\n';
             csv += `團友,${members.join(', ')}\n`;
@@ -1058,17 +1446,6 @@
             a.download = `旅行分賬_${new Date().toISOString().split('T')[0]}.csv`;
             a.click();
             URL.revokeObjectURL(url);
-        }
-
-        function resetAll() {
-            if (confirm('確定要重設所有資料嗎？')) {
-                expenses = [];
-                document.getElementById('memberInput').value = 'A, B, C, D';
-                updateMemberList();
-                document.getElementById('resultArea').innerHTML = '';
-                customAmounts = {};
-                updateFilterDate();
-            }
         }
 
         renderUI();
