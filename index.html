@@ -223,14 +223,12 @@
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('expenseDate').value = today;
 
-    // 旅程代碼記憶
     function getSavedTripId() { const p = new URLSearchParams(window.location.search); return p.get('trip') || localStorage.getItem('lastTripId') || 'default'; }
     function saveTripId(id) { localStorage.setItem('lastTripId', id); }
     currentTripId = getSavedTripId();
     document.getElementById('tripIdInput').value = currentTripId;
     document.getElementById('tripDisplay').innerHTML = `📌 旅程: ${currentTripId}`;
 
-    // 等待 Firebase
     const checkFirebase = setInterval(() => { if (window.firebaseReady && window.db) { db = window.db; firebaseReady = true; clearInterval(checkFirebase); initFirestoreSync(); } }, 100);
 
     function changeTripId() { const newId = document.getElementById('tripIdInput').value.trim(); if (!newId) { alert('請輸入旅程代碼'); return; } currentTripId = newId; saveTripId(currentTripId); document.getElementById('tripDisplay').innerHTML = `📌 旅程: ${currentTripId}`; settledTransactions = {}; initFirestoreSync(); }
@@ -253,9 +251,44 @@
 
     function updateSyncStatus(s) { const b = document.getElementById('syncStatus'); b.className = 'sync-badge' + (s ? ' syncing' : ''); b.innerHTML = s ? '☁️ 同步中...' : '✅ 已同步'; }
 
-    async function saveExpenseToFirestore(ed) { if (!db) return; updateSyncStatus(true); const id = ed.id || Date.now()+'-'+Math.random().toString(36); try { await setDoc(doc(db, 'trips', currentTripId, 'expenses', id), {...ed, id}); await setDoc(doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: {} }); } catch(e) { alert('儲存失敗'); } }
+    // ========== DEBUG 版本儲存功能 ==========
+    async function saveExpenseToFirestore(ed) {
+        if (!db) { alert('❌ 未連接 Firebase'); return; }
+        updateSyncStatus(true);
+        const id = ed.id || Date.now() + '-' + Math.random().toString(36);
+        try {
+            await setDoc(doc(db, 'trips', currentTripId, 'expenses', id), { ...ed, id });
+            await setDoc(doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: {} });
+            updateSyncStatus(false);
+        } catch (e) {
+            console.error('儲存失敗:', e);
+            updateSyncStatus(false);
+            alert('❌ 儲存失敗: ' + (e.message || e));
+        }
+    }
+
     async function deleteExpenseFromFirestore(id) { if (!db) return; updateSyncStatus(true); try { await deleteDoc(doc(db, 'trips', currentTripId, 'expenses', id)); } catch(e) {} }
-    async function saveSettings() { if (!db) return; updateSyncStatus(true); try { await setDoc(doc(db, 'trips', currentTripId, 'settings', 'config'), { members, tripStartDate: document.getElementById('tripStartDate').value, tripEndDate: document.getElementById('tripEndDate').value, currency: document.getElementById('currencySelect').value }); } catch(e) {} }
+
+    async function saveSettings() {
+        if (!db) { alert('❌ 未連接 Firebase'); return; }
+        updateSyncStatus(true);
+        const data = {
+            members,
+            tripStartDate: document.getElementById('tripStartDate').value,
+            tripEndDate: document.getElementById('tripEndDate').value,
+            currency: document.getElementById('currencySelect').value
+        };
+        try {
+            await setDoc(doc(db, 'trips', currentTripId, 'settings', 'config'), data);
+            updateSyncStatus(false);
+            alert('✅ 設定已儲存');
+        } catch (e) {
+            console.error('設定儲存失敗:', e);
+            updateSyncStatus(false);
+            alert('❌ 儲存失敗: ' + (e.message || e));
+        }
+    }
+
     async function clearAllFirestoreData() { if (!db) return; const { collection, getDocs, writeBatch, doc } = window.firebaseHelpers; const batch = writeBatch(db); const snap = await getDocs(collection(db, 'trips', currentTripId, 'expenses')); snap.forEach(d => batch.delete(d.ref)); batch.delete(doc(db, 'trips', currentTripId, 'settings', 'config')); batch.delete(doc(db, 'trips', currentTripId, 'settings', 'settled')); await batch.commit(); }
 
     function renderUI() { updateMemberSelect(); updateFilterPayer(); renderSplitArea(); renderExpenseList(); }
@@ -322,7 +355,6 @@
 
     async function markTransactionSettled(from, to) { if (!confirm(`確定 ${from} 已經俾咗 ${to} 嗎？`)) return; settledTransactions[`${from}|${to}`] = true; try { await setDoc(doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: settledTransactions }); } catch(e) {} }
 
-    // 匯率 Modal 共用
     let pendingExchangeCallback = null;
     function updateExchangeModalLabels() { const base = document.getElementById('currencySelect').value; document.getElementById('baseCurrencyLabel').innerText = base; document.getElementById('targetCurrencyLabel').innerText = 'HKD'; document.getElementById('dirOption1').textContent = `1 ${base} = ? HKD`; document.getElementById('dirOption2').textContent = `1 HKD = ? ${base}`; }
     function showExchangeModal(cb) { pendingExchangeCallback = cb; updateExchangeModalLabels(); document.getElementById('exchangeRateInput').value=''; document.getElementById('exchangePreview').innerHTML=''; document.getElementById('exchangeRateModal').style.display='flex'; }
@@ -360,146 +392,33 @@
     function resetExpenses() { if (confirm('確定要重設所有消費記錄嗎？\n\n團友名單同日期設定會保留。')) { clearAllFirestoreData().then(()=>{ document.getElementById('resultArea').innerHTML=''; customAmounts={}; cancelEdit(); }); } }
     async function clearAllData() { if (confirm('確定要清除全部資料嗎？\n\n所有消費記錄、團友名單、日期同貨幣設定都會被刪除。\n\n呢個動作唔可以還原！')) { await clearAllFirestoreData(); members=['A','B','C','D']; document.getElementById('memberInput').value='A, B, C, D'; document.getElementById('tripStartDate').value=today; document.getElementById('tripEndDate').value=new Date(Date.now()+7*24*60*60*1000).toISOString().split('T')[0]; document.getElementById('currencySelect').value='HKD'; document.getElementById('resultArea').innerHTML=''; cancelEdit(); saveSettings(); renderUI(); } }
 
-    // ========== Excel 匯出 (支援匯率) ==========
-function exportToExcel() {
-    if (!expenses.length) { alert('未有資料'); return; }
-    if (typeof XLSX==='undefined') { alert('Excel 組件載入中，請稍後再試'); return; }
-    showExchangeModal(rate => _exportToExcel(rate));
-}
-
-function _exportToExcel(exchangeRate) {
-    const currency = expenses[0].currency;
-    const wb = XLSX.utils.book_new();
-
-    // 金額格式化：如果冇匯率就淨係原幣，有匯率就原幣 + HKD
-    const fmtAmt = (v) => exchangeRate
-        ? [`${currency} $${v.toFixed(2)}`, `HKD $${(v * exchangeRate).toFixed(2)}`]
-        : [`${currency} $${v.toFixed(2)}`];
-
-    // 標題列
-    const hdr = exchangeRate
-        ? ['日期', '類別', '描述', '付款人', '金額', '金額 (HKD)', '付款方式', '分賬方式', '參與者', '每人金額', '每人金額 (HKD)']
-        : ['日期', '類別', '描述', '付款人', '金額', '付款方式', '分賬方式', '參與者', '每人金額'];
-
-    // 輔助函數：幫一筆消費產生一列數據
-    const rowForExpense = (e) => {
-        const splitBase = e.splitMode === 'equal'
-            ? `平均分 (每人 ${e.currency} $${(e.amount / e.sharedWith.length).toFixed(2)})`
-            : e.sharedWith.map(m => `${m}:${e.splitDetails[m].toFixed(2)}`).join('; ');
-        const row = [e.date, e.category, e.desc, e.payer, ...fmtAmt(e.amount), e.paymentMethod || '現金', e.splitMode === 'equal' ? '平均分' : '自訂金額', e.sharedWith.join(', ')];
-        row.push(splitBase);
-        if (exchangeRate) {
-            const splitHkd = e.splitMode === 'equal'
-                ? `平均分 (每人 HKD $${((e.amount / e.sharedWith.length) * exchangeRate).toFixed(2)})`
-                : e.sharedWith.map(m => `${m}: HKD $${(e.splitDetails[m] * exchangeRate).toFixed(2)}`).join('; ');
-            row.push(splitHkd);
-        }
-        return row;
-    };
-
-    // 輔助函數：將一組消費（已排序）轉為二維陣列，並按日期分組插入空行，最後加總額行
-    const buildSheetData = (expenseList) => {
-        if (!expenseList.length) return [hdr];
-        const sorted = [...expenseList].sort((a, b) => new Date(a.date) - new Date(b.date));
-        const data = [hdr];
-        let lastDate = '';
-        let totalAmount = 0;
-        sorted.forEach(e => {
-            if (e.date !== lastDate) {
-                if (lastDate !== '') data.push([]); // 日期之間空一行
-                lastDate = e.date;
-            }
-            data.push(rowForExpense(e));
-            totalAmount += e.amount;
-        });
-        // 總額行
-        const totalRow = ['', '', '', '總額', ...fmtAmt(totalAmount), '', '', '', ''];
-        if (exchangeRate) totalRow.push(''); // 對應每人金額 (HKD) 欄留空
-        data.push([]); // 總額前可選擇再加空行，但用戶要求最低有總額，直接加喺最後即可
-        data.push(totalRow);
-        return data;
-    };
-
-    // Sheet 1: 消費明細
-    const allExpenses = [...expenses];
-    const detailData = buildSheetData(allExpenses);
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailData), "消費明細");
-
-    // 每日 Sheet
-    const dateGroups = {};
-    expenses.forEach(e => {
-        if (!dateGroups[e.date]) dateGroups[e.date] = [];
-        dateGroups[e.date].push(e);
-    });
-    Object.keys(dateGroups).sort().forEach(date => {
-        // 每日 Sheet 入面唔會再有唔同日期，所以唔使按日期分組空行，直接 buildSheetData 會自動加總額
-        const dayData = buildSheetData(dateGroups[date]);
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dayData), date);
-    });
-
-    // 分類 Sheet
-    const catGroups = {};
-    expenses.forEach(e => {
-        if (!catGroups[e.category]) catGroups[e.category] = [];
-        catGroups[e.category].push(e);
-    });
-    Object.keys(catGroups).sort().forEach(cat => {
-        // 分類入面可能有唔同日期，buildSheetData 會按日期分組空行同加總額
-        const catData = buildSheetData(catGroups[cat]);
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catData), cat);
-    });
-
-    // 個人結餘與還款 (呢個 Sheet 唔加總額)
-    const bal = {};
-    members.forEach(m => bal[m] = 0);
-    expenses.forEach(e => {
-        bal[e.payer] += e.amount;
-        e.sharedWith.forEach(p => bal[p] -= e.splitDetails[p]);
-    });
-
-    const sumHdr = exchangeRate
-        ? ['團友', '總墊付', '總墊付 (HKD)', '總消費', '總消費 (HKD)', '結餘', '結餘 (HKD)', '狀態']
-        : ['團友', '總墊付', '總消費', '結餘', '狀態'];
-    const sumData = [['個人結餘'], sumHdr];
-    members.forEach(m => {
-        const paid = expenses.filter(e => e.payer === m).reduce((s, e) => s + e.amount, 0);
-        const consumed = expenses.reduce((s, e) => s + (e.splitDetails[m] || 0), 0);
-        const b = bal[m];
-        if (exchangeRate) {
-            sumData.push([m, ...fmtAmt(paid), ...fmtAmt(consumed), ...fmtAmt(Math.abs(b)), b > 0 ? '收錢' : b < 0 ? '俾錢' : '無數']);
-        } else {
-            sumData.push([m, ...fmtAmt(paid), ...fmtAmt(consumed), ...fmtAmt(Math.abs(b)), b > 0 ? '收錢' : b < 0 ? '俾錢' : '無數']);
-        }
-    });
-    sumData.push([]); // 空行
-    sumData.push(['還款方案']);
-    const txnHdr = exchangeRate ? ['付款人', '金額', '金額 (HKD)', '收款人'] : ['付款人', '金額', '收款人'];
-    sumData.push(txnHdr);
-
-    const creditors = [], debtors = [];
-    members.forEach(m => {
-        const b = bal[m];
-        if (Math.abs(b) < 0.001) bal[m] = 0;
-        else if (b > 0) creditors.push({ name: m, amount: b });
-        else if (b < 0) debtors.push({ name: m, amount: -b });
-    });
-    creditors.sort((a, b) => b.amount - a.amount);
-    debtors.sort((a, b) => b.amount - a.amount);
-    let ci = 0, di = 0;
-    while (ci < creditors.length && di < debtors.length) {
-        const c = creditors[ci], d = debtors[di];
-        const amt = Math.min(c.amount, d.amount);
-        if (exchangeRate) sumData.push([d.name, ...fmtAmt(amt), c.name]);
-        else sumData.push([d.name, ...fmtAmt(amt), c.name]);
-        c.amount -= amt;
-        d.amount -= amt;
-        if (c.amount < 0.001) ci++;
-        if (d.amount < 0.001) di++;
+    // ========== Excel 匯出 ==========
+    function exportToExcel() { if (!expenses.length) { alert('未有資料'); return; } if (typeof XLSX==='undefined') { alert('Excel 組件載入中，請稍後再試'); return; } showExchangeModal(rate => _exportToExcel(rate)); }
+    function _exportToExcel(exchangeRate) {
+        const currency = expenses[0].currency; const wb = XLSX.utils.book_new();
+        const fmtAmt = (v) => exchangeRate ? [`${currency} $${v.toFixed(2)}`, `HKD $${(v * exchangeRate).toFixed(2)}`] : [`${currency} $${v.toFixed(2)}`];
+        const hdr = exchangeRate ? ['日期','類別','描述','付款人','金額','金額 (HKD)','付款方式','分賬方式','參與者','每人金額','每人金額 (HKD)'] : ['日期','類別','描述','付款人','金額','付款方式','分賬方式','參與者','每人金額'];
+        const rowForExpense = (e) => { const splitBase = e.splitMode === 'equal' ? `平均分 (每人 ${e.currency} $${(e.amount / e.sharedWith.length).toFixed(2)})` : e.sharedWith.map(m => `${m}:${e.splitDetails[m].toFixed(2)}`).join('; '); const row = [e.date, e.category, e.desc, e.payer, ...fmtAmt(e.amount), e.paymentMethod || '現金', e.splitMode === 'equal' ? '平均分' : '自訂金額', e.sharedWith.join(', ')]; row.push(splitBase); if (exchangeRate) { const splitHkd = e.splitMode === 'equal' ? `平均分 (每人 HKD $${((e.amount / e.sharedWith.length) * exchangeRate).toFixed(2)})` : e.sharedWith.map(m => `${m}: HKD $${(e.splitDetails[m] * exchangeRate).toFixed(2)}`).join('; '); row.push(splitHkd); } return row; };
+        const buildSheetData = (expenseList) => { if (!expenseList.length) return [hdr]; const sorted = [...expenseList].sort((a, b) => new Date(a.date) - new Date(b.date)); const data = [hdr]; let lastDate = ''; let totalAmount = 0; sorted.forEach(e => { if (e.date !== lastDate) { if (lastDate !== '') data.push([]); lastDate = e.date; } data.push(rowForExpense(e)); totalAmount += e.amount; }); const totalRow = ['', '', '', '總額', ...fmtAmt(totalAmount), '', '', '', '']; if (exchangeRate) totalRow.push(''); data.push([]); data.push(totalRow); return data; };
+        const allExpenses = [...expenses]; const detailData = buildSheetData(allExpenses); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailData), "消費明細");
+        const dateGroups = {}; expenses.forEach(e => { if (!dateGroups[e.date]) dateGroups[e.date] = []; dateGroups[e.date].push(e); }); Object.keys(dateGroups).sort().forEach(date => { const dayData = buildSheetData(dateGroups[date]); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dayData), date); });
+        const catGroups = {}; expenses.forEach(e => { if (!catGroups[e.category]) catGroups[e.category] = []; catGroups[e.category].push(e); }); Object.keys(catGroups).sort().forEach(cat => { const catData = buildSheetData(catGroups[cat]); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catData), cat); });
+        const bal = {}; members.forEach(m => bal[m] = 0); expenses.forEach(e => { bal[e.payer] += e.amount; e.sharedWith.forEach(p => bal[p] -= e.splitDetails[p]); });
+        const sumHdr = exchangeRate ? ['團友', '總墊付', '總墊付 (HKD)', '總消費', '總消費 (HKD)', '結餘', '結餘 (HKD)', '狀態'] : ['團友', '總墊付', '總消費', '結餘', '狀態'];
+        const sumData = [['個人結餘'], sumHdr];
+        members.forEach(m => { const paid = expenses.filter(e => e.payer === m).reduce((s, e) => s + e.amount, 0); const consumed = expenses.reduce((s, e) => s + (e.splitDetails[m] || 0), 0); const b = bal[m]; if (exchangeRate) { sumData.push([m, ...fmtAmt(paid), ...fmtAmt(consumed), ...fmtAmt(Math.abs(b)), b > 0 ? '收錢' : b < 0 ? '俾錢' : '無數']); } else { sumData.push([m, ...fmtAmt(paid), ...fmtAmt(consumed), ...fmtAmt(Math.abs(b)), b > 0 ? '收錢' : b < 0 ? '俾錢' : '無數']); } });
+        sumData.push([]); sumData.push(['還款方案']); const txnHdr = exchangeRate ? ['付款人', '金額', '金額 (HKD)', '收款人'] : ['付款人', '金額', '收款人']; sumData.push(txnHdr);
+        const creditors = [], debtors = []; members.forEach(m => { const b = bal[m]; if (Math.abs(b) < 0.001) bal[m] = 0; else if (b > 0) creditors.push({ name: m, amount: b }); else if (b < 0) debtors.push({ name: m, amount: -b }); }); creditors.sort((a, b) => b.amount - a.amount); debtors.sort((a, b) => b.amount - a.amount);
+        let ci = 0, di = 0; while (ci < creditors.length && di < debtors.length) { const c = creditors[ci], d = debtors[di]; const amt = Math.min(c.amount, d.amount); if (exchangeRate) sumData.push([d.name, ...fmtAmt(amt), c.name]); else sumData.push([d.name, ...fmtAmt(amt), c.name]); c.amount -= amt; d.amount -= amt; if (c.amount < 0.001) ci++; if (d.amount < 0.001) di++; }
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumData), "個人結餘與還款");
+        XLSX.writeFile(wb, `旅行分賬_${currentTripId}_${today}${exchangeRate ? '_已換算' : ''}.xlsx`);
     }
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumData), "個人結餘與還款");
 
-    XLSX.writeFile(wb, `旅行分賬_${currentTripId}_${today}${exchangeRate ? '_已換算' : ''}.xlsx`);
-}
+    function exportBackup() { const data = { tripId: currentTripId, members, expenses, tripStartDate: document.getElementById('tripStartDate').value, tripEndDate: document.getElementById('tripEndDate').value, currency: document.getElementById('currencySelect').value }; const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`旅行分賬備份_${currentTripId}_${today}.json`; a.click(); URL.revokeObjectURL(a.href); }
+    async function importBackup(event) { const file=event.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async(e)=>{ try{ const data=JSON.parse(e.target.result); if(data.members){ members=data.members; document.getElementById('memberInput').value=members.join(', '); } if(data.tripStartDate) document.getElementById('tripStartDate').value=data.tripStartDate; if(data.tripEndDate) document.getElementById('tripEndDate').value=data.tripEndDate; if(data.currency) document.getElementById('currencySelect').value=data.currency; await saveSettings(); if(data.expenses){ for(const exp of data.expenses){ await saveExpenseToFirestore({...exp, id: exp.id||Date.now()+'-'+Math.random().toString(36)}); } } cancelEdit(); renderUI(); alert('✅ 備份匯入成功！'); } catch(err){ alert('❌ 檔案格式錯誤'); } }; reader.readAsText(file); event.target.value=''; }
+
+    renderUI();
+    toggleOtherPaymentInput();
 </script>
 </body>
 </html>
