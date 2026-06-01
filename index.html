@@ -219,7 +219,8 @@
 <script>
     // ========== 全域變數 ==========
     let db = null; let firebaseReady = false; let currentTripId = 'default';
-    let members = ['A', 'B', 'C', 'D']; let expenses = []; let currentSplitMode = 'equal'; let customAmounts = {}; let editingExpenseId = null; let settledTransactions = {};
+    let members = ['A', 'B', 'C', 'D']; let expenses = []; let currentSplitMode = 'equal';
+    let customAmounts = {}; let editingExpenseId = null; let settledTransactions = {};
     const today = new Date().toISOString().split('T')[0];
     document.getElementById('expenseDate').value = today;
 
@@ -239,26 +240,27 @@
         if (unsubscribeExpenses) unsubscribeExpenses();
         if (unsubscribeSettings) unsubscribeSettings();
         if (unsubscribeSettled) unsubscribeSettled();
-        const { collection, doc, onSnapshot } = window.firebaseHelpers;
-        unsubscribeExpenses = onSnapshot(collection(db, 'trips', currentTripId, 'expenses'), (snap) => { expenses = []; snap.forEach(d => expenses.push({...d.data(), id: d.id})); updateFilterDate(); renderExpenseList(); if (document.getElementById('resultArea').innerHTML) generateFullReport(); updateSyncStatus(false); });
-        unsubscribeSettings = onSnapshot(doc(db, 'trips', currentTripId, 'settings', 'config'), (snap) => {
+        const h = window.firebaseHelpers;
+        unsubscribeExpenses = h.onSnapshot(h.collection(db, 'trips', currentTripId, 'expenses'), (snap) => { expenses = []; snap.forEach(d => expenses.push({...d.data(), id: d.id})); updateFilterDate(); renderExpenseList(); if (document.getElementById('resultArea').innerHTML) generateFullReport(); updateSyncStatus(false); });
+        unsubscribeSettings = h.onSnapshot(h.doc(db, 'trips', currentTripId, 'settings', 'config'), (snap) => {
             if (snap.exists()) { const d = snap.data(); if (d.members) { members = d.members; document.getElementById('memberInput').value = members.join(', '); } document.getElementById('tripStartDate').value = d.tripStartDate || today; document.getElementById('tripEndDate').value = d.tripEndDate || new Date(Date.now()+7*24*60*60*1000).toISOString().split('T')[0]; if (d.currency) document.getElementById('currencySelect').value = d.currency; renderUI(); }
             else { document.getElementById('tripStartDate').value = today; document.getElementById('tripEndDate').value = new Date(Date.now()+7*24*60*60*1000).toISOString().split('T')[0]; saveSettings(); }
             updateSyncStatus(false);
         });
-        unsubscribeSettled = onSnapshot(doc(db, 'trips', currentTripId, 'settings', 'settled'), (snap) => { settledTransactions = snap.exists() ? snap.data().transactions || {} : {}; if (document.getElementById('resultArea').innerHTML) generateFullReport(); });
+        unsubscribeSettled = h.onSnapshot(h.doc(db, 'trips', currentTripId, 'settings', 'settled'), (snap) => { settledTransactions = snap.exists() ? snap.data().transactions || {} : {}; if (document.getElementById('resultArea').innerHTML) generateFullReport(); });
     }
 
     function updateSyncStatus(s) { const b = document.getElementById('syncStatus'); b.className = 'sync-badge' + (s ? ' syncing' : ''); b.innerHTML = s ? '☁️ 同步中...' : '✅ 已同步'; }
 
-    // ========== DEBUG 版本儲存功能 ==========
+    // ========== 所有 Firebase 寫入操作統一用 window.firebaseHelpers ==========
     async function saveExpenseToFirestore(ed) {
         if (!db) { alert('❌ 未連接 Firebase'); return; }
         updateSyncStatus(true);
+        const h = window.firebaseHelpers;
         const id = ed.id || Date.now() + '-' + Math.random().toString(36);
         try {
-            await setDoc(doc(db, 'trips', currentTripId, 'expenses', id), { ...ed, id });
-            await setDoc(doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: {} });
+            await h.setDoc(h.doc(db, 'trips', currentTripId, 'expenses', id), { ...ed, id });
+            await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: {} });
             updateSyncStatus(false);
         } catch (e) {
             console.error('儲存失敗:', e);
@@ -267,11 +269,17 @@
         }
     }
 
-    async function deleteExpenseFromFirestore(id) { if (!db) return; updateSyncStatus(true); try { await deleteDoc(doc(db, 'trips', currentTripId, 'expenses', id)); } catch(e) {} }
+    async function deleteExpenseFromFirestore(id) {
+        if (!db) return;
+        updateSyncStatus(true);
+        const h = window.firebaseHelpers;
+        try { await h.deleteDoc(h.doc(db, 'trips', currentTripId, 'expenses', id)); } catch(e) {}
+    }
 
     async function saveSettings() {
         if (!db) { alert('❌ 未連接 Firebase'); return; }
         updateSyncStatus(true);
+        const h = window.firebaseHelpers;
         const data = {
             members,
             tripStartDate: document.getElementById('tripStartDate').value,
@@ -279,7 +287,7 @@
             currency: document.getElementById('currencySelect').value
         };
         try {
-            await setDoc(doc(db, 'trips', currentTripId, 'settings', 'config'), data);
+            await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), data);
             updateSyncStatus(false);
             alert('✅ 設定已儲存');
         } catch (e) {
@@ -289,8 +297,25 @@
         }
     }
 
-    async function clearAllFirestoreData() { if (!db) return; const { collection, getDocs, writeBatch, doc } = window.firebaseHelpers; const batch = writeBatch(db); const snap = await getDocs(collection(db, 'trips', currentTripId, 'expenses')); snap.forEach(d => batch.delete(d.ref)); batch.delete(doc(db, 'trips', currentTripId, 'settings', 'config')); batch.delete(doc(db, 'trips', currentTripId, 'settings', 'settled')); await batch.commit(); }
+    async function clearAllFirestoreData() {
+        if (!db) return;
+        const h = window.firebaseHelpers;
+        const batch = h.writeBatch(db);
+        const snap = await h.getDocs(h.collection(db, 'trips', currentTripId, 'expenses'));
+        snap.forEach(d => batch.delete(d.ref));
+        batch.delete(h.doc(db, 'trips', currentTripId, 'settings', 'config'));
+        batch.delete(h.doc(db, 'trips', currentTripId, 'settings', 'settled'));
+        await batch.commit();
+    }
 
+    async function markTransactionSettled(from, to) {
+        if (!confirm(`確定 ${from} 已經俾咗 ${to} 嗎？`)) return;
+        settledTransactions[`${from}|${to}`] = true;
+        const h = window.firebaseHelpers;
+        try { await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: settledTransactions }); } catch(e) {}
+    }
+
+    // ========== UI ==========
     function renderUI() { updateMemberSelect(); updateFilterPayer(); renderSplitArea(); renderExpenseList(); }
     function updateMemberList() { const v = document.getElementById('memberInput').value; members = v.split(',').map(s=>s.trim()).filter(s=>s); if (!members.length) members = ['A','B','C','D']; saveSettings(); renderUI(); }
     function updateMemberSelect() { const s = document.getElementById('payerSelect'); s.innerHTML = ''; members.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); }
@@ -353,8 +378,7 @@
         container.innerHTML = html;
     }
 
-    async function markTransactionSettled(from, to) { if (!confirm(`確定 ${from} 已經俾咗 ${to} 嗎？`)) return; settledTransactions[`${from}|${to}`] = true; try { await setDoc(doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: settledTransactions }); } catch(e) {} }
-
+    // ========== 匯率 Modal ==========
     let pendingExchangeCallback = null;
     function updateExchangeModalLabels() { const base = document.getElementById('currencySelect').value; document.getElementById('baseCurrencyLabel').innerText = base; document.getElementById('targetCurrencyLabel').innerText = 'HKD'; document.getElementById('dirOption1').textContent = `1 ${base} = ? HKD`; document.getElementById('dirOption2').textContent = `1 HKD = ? ${base}`; }
     function showExchangeModal(cb) { pendingExchangeCallback = cb; updateExchangeModalLabels(); document.getElementById('exchangeRateInput').value=''; document.getElementById('exchangePreview').innerHTML=''; document.getElementById('exchangeRateModal').style.display='flex'; }
@@ -365,6 +389,7 @@
     function applyExchangeRate() { const rate = parseFloat(document.getElementById('exchangeRateInput').value), dir = document.getElementById('exchangeDirection').value; if (isNaN(rate)||rate<=0) { if (confirm('未輸入有效匯率，要跳過匯率換算嗎？')) { hideExchangeModal(); pendingExchangeCallback?.(null); } return; } hideExchangeModal(); pendingExchangeCallback?.(dir==='1' ? rate : 1/rate); }
     function skipExchangeRate() { hideExchangeModal(); pendingExchangeCallback?.(null); }
 
+    // ========== 完整總結表 ==========
     function generateFullReport() { if (!expenses.length) { alert('請先新增消費記錄'); return; } showExchangeModal(rate => _generateFullReport(rate)); }
     function _generateFullReport(exchangeRate) {
         const currency = expenses[0].currency; const balance = {}; members.forEach(m=>balance[m]=0);
