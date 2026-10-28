@@ -119,7 +119,7 @@
         .modal .modal-actions button { flex: 1; }
         .other-payment-input { margin-top: 6px; }
         .home-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
-        .home-header h1 { margin: 0; cursor: default; user-select: none; }
+        .home-header h1 { margin: 0; }
         .home-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .trip-card { background: #f9f9f9; border-radius: 16px; padding: 16px; margin-bottom: 12px; cursor: pointer; transition: all 0.2s; border: 2px solid transparent; }
         .trip-card:hover { border-color: #4a90d9; background: #f0f7ff; }
@@ -136,8 +136,6 @@
         .home-back-btn { background: #f0f0f0; color: #1a1a1a; border: 1px solid #ddd; border-radius: 14px; padding: 8px 14px; font-size: 14px; cursor: pointer; width: auto; min-height: 40px; }
         .home-back-btn:active { background: #e0e0e0; }
         .page-hidden { display: none !important; }
-        .scan-btn { background: #fff3e0; color: #e65100; border: 1px dashed #e65100; border-radius: 14px; padding: 8px 14px; font-size: 14px; cursor: pointer; width: auto; min-height: 40px; }
-        .scan-btn:active { background: #ffe0b2; }
     </style>
 </head>
 <body>
@@ -146,10 +144,9 @@
 <div id="homePage">
     <div class="card">
         <div class="home-header">
-            <h1 onclick="secretTap()">🧳 旅行夾錢計數機</h1>
+            <h1>🧳 旅行夾錢計數機</h1>
             <div class="home-actions">
                 <button onclick="openNewTripModal()" class="small">➕ 新增旅程</button>
-                <button onclick="scanOldTrips()" class="scan-btn" id="scanBtn" style="display: none;">🔍 掃描舊旅程</button>
             </div>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -299,25 +296,6 @@
 
     document.getElementById('expenseDate').value = today;
 
-    // ========== 秘密觸發：連撳標題 5 次 ==========
-    let secretTapCount = 0;
-    let secretTapTimer = null;
-    function secretTap() {
-        secretTapCount++;
-        if (secretTapTimer) clearTimeout(secretTapTimer);
-        secretTapTimer = setTimeout(() => { secretTapCount = 0; }, 2000);
-        if (secretTapCount >= 5) {
-            secretTapCount = 0;
-            document.getElementById('scanBtn').style.display = 'inline-block';
-            // 記住已經解鎖，下次打開都見到
-            localStorage.setItem('scanUnlocked', 'true');
-        }
-    }
-    // 如果之前解鎖過，直接顯示
-    if (localStorage.getItem('scanUnlocked') === 'true') {
-        document.getElementById('scanBtn').style.display = 'inline-block';
-    }
-
     // ========== 旅程清單 ==========
     function getTripList() {
         try { return JSON.parse(localStorage.getItem('tripList') || '[]'); } catch(e) { return []; }
@@ -400,38 +378,6 @@
         document.getElementById('tripDisplay').innerHTML = `📌 旅程: ${tripId}`;
         showCalculator();
         initFirestoreSync();
-    }
-
-    // ========== 手動掃描舊旅程 ==========
-    async function scanOldTrips() {
-        if (!db) { alert('❌ Firebase 未連接'); return; }
-        if (!confirm('🔍 呢個功能會掃描 Firestore 入面所有旅程，並加入你嘅首頁清單。\n\n確定要掃描嗎？')) return;
-
-        const h = window.firebaseHelpers;
-        try {
-            const tripsSnap = await h.getDocs(h.collection(db, 'trips'));
-            let list = getTripList();
-            let added = 0;
-            const promises = [];
-            tripsSnap.forEach(t => {
-                if (!list.includes(t.id)) {
-                    list.push(t.id);
-                    added++;
-                }
-                promises.push(h.getDocs(h.collection(db, 'trips', t.id, 'info')).then(snap => {
-                    if (!snap.empty) {
-                        tripInfoCache[t.id] = snap.docs[0].data();
-                    }
-                }).catch(()=>{}));
-            });
-            saveTripList(list);
-            await Promise.all(promises);
-            renderTripList();
-            alert(`✅ 掃描完成！\n\n新增咗 ${added} 個旅程到首頁。\n總共有 ${list.length} 個旅程。`);
-        } catch(e) {
-            console.error('掃描失敗:', e);
-            alert('❌ 掃描失敗: ' + (e.message || e));
-        }
     }
 
     // ========== 新增旅程 ==========
