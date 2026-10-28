@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>資料拯救工具</title>
+    <title>資料拯救工具 V2</title>
     <style>
         body { font-family: -apple-system, sans-serif; padding: 20px; text-align: center; background: #f5f5f5; }
         .card { background: white; padding: 20px; border-radius: 20px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -12,7 +12,6 @@
         button:disabled { background: #ccc; }
         #log { text-align: left; margin-top: 20px; background: #f9f9f9; padding: 15px; border-radius: 10px; font-size: 14px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
     </style>
-    <!-- Firebase SDK -->
     <script type="module">
         const firebaseConfig = {
             apiKey: "AIzaSyDtdINUEKZfrjt9vS1n_8sfTCDmNCYpLeE",
@@ -30,14 +29,13 @@
         
         window.db = db;
         window.firebaseHelpers = { collection, doc, getDocs, setDoc, writeBatch };
-        console.log("✅ Firebase 已連接");
     </script>
 </head>
 <body>
     <div class="card">
-        <h1>🚑 資料拯救工具</h1>
-        <p>呢個工具會自動掃描你 Firestore 入面所有舊資料，並幫你搬入正確嘅 <code>trips</code> 資料夾。</p>
-        <button id="rescueBtn" onclick="startRescue()">開始拯救資料</button>
+        <h1>🚑 資料拯救工具 V2</h1>
+        <p>呢個工具會強制搵出含有 `members` 嘅設定，並搬入 `trips/1234`。</p>
+        <button id="rescueBtn" onclick="startRescue()">開始強制拯救</button>
         <div id="log">準備中...\n</div>
     </div>
 
@@ -51,76 +49,55 @@
         async function startRescue() {
             const btn = document.getElementById('rescueBtn');
             btn.disabled = true;
-            btn.innerText = '拯救中...請稍候';
+            btn.innerText = '拯救中...';
             document.getElementById('log').innerText = '開始掃描...\n';
 
             const h = window.firebaseHelpers;
             const db = window.db;
             
             try {
-                // 1. 取得最頂層嘅所有 Collection (即係你見到嘅 1234, 2026.9 等等)
-                // 注意：喺前端 SDK 要攞最頂層嘅 collection 名稱比較難，所以我哋用一個聰明啲嘅方法：
-                // 直接去搵 `trips`，同時去搵我哋已知嘅錯誤位置（例如 1234）。
-                // 但為咗通用啲，我哋會用 `collectionGroup` 或者逐個測試。
+                log("檢查 /config/config 位置...");
+                // 根據你張圖，資料喺 /config/config
+                const configDocRef = h.doc(db, 'config', 'config');
+                const configSnap = await h.getDocs(h.collection(db, 'config')); // 試下 list 出嚟
                 
-                // 因為前端 Firebase 冇得直接 list 最頂層 collections，我哋會嘗試去搵 `trips` 入面有咩，
-                // 同埋假設你之前嘅錯誤 collection 名叫 `1234` (根據你張圖)。
+                let found = false;
                 
-                const possibleTopLevelCollections = ['1234']; // 如果你仲記得其他名，可以加落呢個 array
-                let movedCount = 0;
-
-                log("檢查錯誤位置...");
-
-                for (const colName of possibleTopLevelCollections) {
-                    log(`\n檢查最頂層資料夾: /${colName}`);
-                    const colRef = h.collection(db, colName);
-                    const colSnap = await h.getDocs(colRef);
-                    
-                    if (colSnap.empty) {
-                        log(`  └ 冇資料`);
-                        continue;
-                    }
-
-                    // 逐個 document 檢查 (例如 doc 名叫 `1234`)
-                    for (const docSnap of colSnap.docs) {
-                        const docId = docSnap.id;
-                        const docData = docSnap.data();
-                        
-                        log(`  └ 搵到 Document: ${docId}`);
-
-                        // 檢查入面有冇 settings 同 expenses (證明佢係一個旅程)
-                        const subCollections = ['settings', 'expenses'];
-                        for (const subCol of subCollections) {
-                            const subColRef = h.collection(db, colName, docId, subCol);
-                            const subColSnap = await h.getDocs(subColRef);
+                if (!configSnap.empty) {
+                    for (const docSnap of configSnap.docs) {
+                        const data = docSnap.data();
+                        if (data.members && Array.isArray(data.members)) {
+                            log(`✅ 喺 /config/${docSnap.id} 搵到資料！`);
+                            found = true;
                             
-                            if (!subColSnap.empty) {
-                                log(`    └ 入面有 /${subCol} (共 ${subColSnap.size} 筆資料) -> 準備搬去 trips/${docId}/${subCol}`);
-                                
-                                const batch = h.writeBatch(db);
-                                let count = 0;
-                                
-                                subColSnap.forEach(subDoc => {
-                                    const newDocRef = h.doc(db, 'trips', docId, subCol, subDoc.id);
-                                    batch.set(newDocRef, subDoc.data());
-                                    count++;
-                                });
-                                
-                                await batch.commit();
-                                log(`    └ ✅ 成功搬運 ${count} 筆資料！`);
-                                movedCount++;
-                            }
+                            log("正在搬運到 trips/1234/settings/config...");
+                            // 搬去新位置
+                            await h.setDoc(h.doc(db, 'trips', '1234', 'settings', 'config'), data);
+                            
+                            log("正在建立 trips/1234/info...");
+                            // 幫佢建立 info (俾首頁顯示用)
+                            await h.setDoc(h.doc(db, 'trips', '1234', 'info', 'data'), {
+                                tripId: '1234',
+                                customName: '舊旅程',
+                                tripStartDate: data.tripStartDate || '',
+                                tripEndDate: data.tripEndDate || '',
+                                members: data.members,
+                                currency: data.currency || 'HKD',
+                                totalExpense: 0,
+                                lastUpdated: new Date().toISOString()
+                            });
+                            
+                            log("✅ 搬運完成！");
                         }
                     }
                 }
 
-                if (movedCount > 0) {
-                    log(`\n🎉 拯救完成！總共搬運咗 ${movedCount} 組資料。`);
-                    log(`請返去首頁撳「🔍 掃描舊旅程」就可以見到。`);
+                if (found) {
+                    log(`\n🎉 拯救成功！請去返首頁撳「🔍 掃描舊旅程」或者直接新增旅程代碼「1234」。`);
                     btn.innerText = '✅ 拯救完成！';
                 } else {
-                    log(`\n⚠️ 冇搵到需要搬運嘅資料。`);
-                    btn.innerText = '冇資料需要搬運';
+                    log(`\n⚠️ 搵唔到含有 members 嘅舊資料。`);
+                    btn.innerText = '搵唔到資料';
                 }
 
             } catch (e) {
