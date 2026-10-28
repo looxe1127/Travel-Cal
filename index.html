@@ -294,7 +294,6 @@
     const today = new Date().toISOString().split('T')[0];
     const PRESET_CURRENCIES = ['HKD', 'TWD', 'JPY', 'KRW', 'USD'];
 
-    // 記住而家喺邊一版 (home 定 calculator)
     let currentPage = localStorage.getItem('lastPage') || 'home';
 
     document.getElementById('expenseDate').value = today;
@@ -323,7 +322,19 @@
         document.getElementById('homePage').classList.add('page-hidden');
         document.getElementById('calculatorPage').classList.remove('page-hidden');
     }
-    function goHome() { showHome(); }
+    function goHome() { 
+        // 撳返回首頁嗰陣，強制再讀取一次最新嘅資料，確保首頁顯示正確
+        if (db) {
+            getTripList().forEach(async (tripId) => {
+                try {
+                    const h = window.firebaseHelpers;
+                    const snap = await h.getDocs(h.collection(db, 'trips', tripId, 'info'));
+                    if (!snap.empty) tripInfoCache[tripId] = snap.docs[0].data();
+                } catch(e) {}
+            });
+        }
+        showHome(); 
+    }
 
     // ========== 首頁清單渲染 ==========
     function renderTripList() {
@@ -411,6 +422,7 @@
         if (db) {
             const h = window.firebaseHelpers;
             try {
+                // 建立 info 同 settings
                 await h.setDoc(h.doc(db, 'trips', code, 'info', 'data'), {
                     tripId: code, customName: name, tripStartDate: start, tripEndDate: end,
                     members: ['A','B','C','D'], currency: 'HKD', totalExpense: 0,
@@ -439,7 +451,6 @@
             firebaseReady = true;
             clearInterval(checkFirebase);
             
-            // 根據上次記憶決定顯示邊一版
             if (currentPage === 'home') {
                 showHome();
             } else {
@@ -558,8 +569,17 @@
         };
         try {
             await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), data);
+            // 呢個係關鍵：儲存設定嗰陣，順手將最新嘅日期同團友寫入 `info`，等首頁即刻顯示到！
+            await h.setDoc(h.doc(db, 'trips', currentTripId, 'info', 'data'), {
+                tripId: currentTripId,
+                tripStartDate: data.tripStartDate,
+                tripEndDate: data.tripEndDate,
+                members: data.members,
+                currency: data.currency,
+                lastUpdated: new Date().toISOString()
+            }, { merge: true });
+            
             updateSyncStatus(false);
-            updateTripInfo();
             alert('✅ 設定已儲存');
         } catch (e) { console.error('設定儲存失敗:', e); updateSyncStatus(false); alert('❌ 儲存失敗: ' + (e.message || e)); }
     }
