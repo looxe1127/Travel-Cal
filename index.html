@@ -141,7 +141,7 @@
 <body>
 
 <!-- ========== 首頁 ========== -->
-<div id="homePage">
+<div id="homePage" class="page-hidden">
     <div class="card">
         <div class="home-header">
             <h1>🧳 旅行夾錢計數機</h1>
@@ -294,6 +294,9 @@
     const today = new Date().toISOString().split('T')[0];
     const PRESET_CURRENCIES = ['HKD', 'TWD', 'JPY', 'KRW', 'USD'];
 
+    // 記住而家喺邊一版 (home 定 calculator)
+    let currentPage = localStorage.getItem('lastPage') || 'home';
+
     document.getElementById('expenseDate').value = today;
 
     // ========== 旅程清單 ==========
@@ -306,13 +309,17 @@
     function getLastTripId() { return localStorage.getItem('lastTripId') || 'default'; }
     function saveLastTripId(id) { localStorage.setItem('lastTripId', id); }
 
-    // ========== 頁面切換 ==========
+    // ========== 頁面切換 (加咗記憶) ==========
     function showHome() {
+        currentPage = 'home';
+        localStorage.setItem('lastPage', 'home');
         document.getElementById('homePage').classList.remove('page-hidden');
         document.getElementById('calculatorPage').classList.add('page-hidden');
         renderTripList();
     }
     function showCalculator() {
+        currentPage = 'calculator';
+        localStorage.setItem('lastPage', 'calculator');
         document.getElementById('homePage').classList.add('page-hidden');
         document.getElementById('calculatorPage').classList.remove('page-hidden');
     }
@@ -431,8 +438,14 @@
             db = window.db;
             firebaseReady = true;
             clearInterval(checkFirebase);
-            if (getLastTripId()) { showCalculator(); initFirestoreSync(); }
-            else { showHome(); }
+            
+            // 根據上次記憶決定顯示邊一版
+            if (currentPage === 'home') {
+                showHome();
+            } else {
+                showCalculator();
+                initFirestoreSync();
+            }
         }
     }, 100);
 
