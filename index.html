@@ -290,10 +290,12 @@
     let db = null; let firebaseReady = false; let currentTripId = 'default';
     let members = ['A', 'B', 'C', 'D']; let expenses = []; let currentSplitMode = 'equal';
     let customAmounts = {}; let editingExpenseId = null; let settledTransactions = {};
-    let tripInfoCache = {};
+    
+    // 儲存首頁資料嘅 Cache
+    let homeDataCache = {}; // { tripId: { members: [], tripStartDate: '', tripEndDate: '', customName: '', totalExpense: 0, currency: 'HKD' } }
+
     const today = new Date().toISOString().split('T')[0];
     const PRESET_CURRENCIES = ['HKD', 'TWD', 'JPY', 'KRW', 'USD'];
-
     let currentPage = localStorage.getItem('lastPage') || 'home';
 
     document.getElementById('expenseDate').value = today;
@@ -308,7 +310,7 @@
     function getLastTripId() { return localStorage.getItem('lastTripId') || 'default'; }
     function saveLastTripId(id) { localStorage.setItem('lastTripId', id); }
 
-    // ========== 頁面切換 (加咗記憶) ==========
+    // ========== 頁面切換 ==========
     function showHome() {
         currentPage = 'home';
         localStorage.setItem('lastPage', 'home');
@@ -322,21 +324,9 @@
         document.getElementById('homePage').classList.add('page-hidden');
         document.getElementById('calculatorPage').classList.remove('page-hidden');
     }
-    function goHome() { 
-        // 撳返回首頁嗰陣，強制再讀取一次最新嘅資料，確保首頁顯示正確
-        if (db) {
-            getTripList().forEach(async (tripId) => {
-                try {
-                    const h = window.firebaseHelpers;
-                    const snap = await h.getDocs(h.collection(db, 'trips', tripId, 'info'));
-                    if (!snap.empty) tripInfoCache[tripId] = snap.docs[0].data();
-                } catch(e) {}
-            });
-        }
-        showHome(); 
-    }
+    function goHome() { showHome(); }
 
-    // ========== 首頁清單渲染 ==========
+    // ========== 首頁清單渲染 (核心修改：直接讀取 homeDataCache) ==========
     function renderTripList() {
         const container = document.getElementById('tripList');
         const sortMode = document.getElementById('sortSelect').value;
@@ -349,19 +339,25 @@
 
         if (sortMode === 'lastUpdated') {
             list.sort((a, b) => {
-                const infoA = tripInfoCache[a] || {};
-                const infoB = tripInfoCache[b] || {};
+                const infoA = homeDataCache[a] || {};
+                const infoB = homeDataCache[b] || {};
                 return (infoB.lastUpdated || '').localeCompare(infoA.lastUpdated || '');
             });
         }
 
         let html = '';
         list.forEach(tripId => {
-            const info = tripInfoCache[tripId] || {};
+            const info = homeDataCache[tripId] || {};
             const displayName = info.customName || tripId;
-            const dateRange = info.tripStartDate && info.tripEndDate ? `${info.tripStartDate} ~ ${info.tripEndDate}` : '未設定日期';
-            const membersStr = info.members && info.members.length ? info.members.join('、') : '未設定';
-            const totalStr = info.totalExpense !== undefined ? `${info.currency || ''} $${Number(info.totalExpense).toFixed(2)}` : '未有消費';
+            
+            // 顯示日期
+            const dateRange = (info.tripStartDate && info.tripEndDate) ? `${info.tripStartDate} ~ ${info.tripEndDate}` : '未設定日期';
+            
+            // 顯示團友
+            const membersStr = (info.members && info.members.length) ? info.members.join('、') : '未設定';
+            
+            // 顯示總消費
+            const totalStr = (info.totalExpense !== undefined) ? `${info.currency || 'HKD'} $${Number(info.totalExpense).toFixed(2)}` : '未有消費';
 
             html += `<div class="trip-card" onclick="loadTripFromHome('${tripId}')">
                 <div class="trip-card-header">
@@ -385,7 +381,7 @@
         if (!confirm(`確定要從首頁移除「${tripId}」嗎？\n\n（Firestore 資料會保留，唔會刪除）`)) return;
         let list = getTripList().filter(id => id !== tripId);
         saveTripList(list);
-        delete tripInfoCache[tripId];
+        delete homeDataCache[tripId];
         renderTripList();
     }
 
@@ -422,15 +418,12 @@
         if (db) {
             const h = window.firebaseHelpers;
             try {
-                // 建立 info 同 settings
-                await h.setDoc(h.doc(db, 'trips', code, 'info', 'data'), {
-                    tripId: code, customName: name, tripStartDate: start, tripEndDate: end,
-                    members: ['A','B','C','D'], currency: 'HKD', totalExpense: 0,
-                    lastUpdated: new Date().toISOString(), createdAt: new Date().toISOString()
-                });
                 await h.setDoc(h.doc(db, 'trips', code, 'settings', 'config'), {
                     members: ['A','B','C','D'], tripStartDate: start, tripEndDate: end, currency: 'HKD'
                 });
+                await h.setDoc(h.doc(db, 'trips', code, 'info', 'data'), {
+                    customName: name, lastUpdated: new Date().toISOString(), createdAt: new Date().toISOString()
+                }, { merge: true });
             } catch(e) { console.error(e); }
         }
 
@@ -451,6 +444,9 @@
             firebaseReady = true;
             clearInterval(checkFirebase);
             
+            // 初始化首頁嘅監聽器
+            setupHomeListeners();
+
             if (currentPage === 'home') {
                 showHome();
             } else {
@@ -460,6 +456,40 @@
         }
     }, 100);
 
+    // ★★★ 呢個係全新嘅首頁監聽器，確保首頁數據永遠準確 ★★★
+    function setupHomeListeners() {
+        if (!db) return;
+        const h = window.firebaseHelpers;
+        const list = getTripList();
+
+        list.forEach(tripId => {
+            // 監聽 settings/config (用嚟攞日期同人名)
+            h.onSnapshot(h.doc(db, 'trips', tripId, 'settings', 'config'), (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (!homeDataCache[tripId]) homeDataCache[tripId] = {};
+                    homeDataCache[tripId].members = data.members || ['A','B','C','D'];
+                    homeDataCache[tripId].tripStartDate = data.tripStartDate || '';
+                    homeDataCache[tripId].tripEndDate = data.tripEndDate || '';
+                    homeDataCache[tripId].currency = data.currency || 'HKD';
+                    if (currentPage === 'home') renderTripList();
+                }
+            });
+
+            // 監聽 info/data (用嚟攞自訂名稱、總消費)
+            h.onSnapshot(h.doc(db, 'trips', tripId, 'info', 'data'), (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    if (!homeDataCache[tripId]) homeDataCache[tripId] = {};
+                    homeDataCache[tripId].customName = data.customName || '';
+                    homeDataCache[tripId].totalExpense = data.totalExpense || 0;
+                    homeDataCache[tripId].lastUpdated = data.lastUpdated || '';
+                    if (currentPage === 'home') renderTripList();
+                }
+            });
+        });
+    }
+
     function changeTripId() {
         const newId = document.getElementById('tripIdInput').value.trim();
         if (!newId) { alert('請輸入旅程代碼'); return; }
@@ -467,18 +497,17 @@
         saveLastTripId(currentTripId);
         document.getElementById('tripDisplay').innerHTML = `📌 旅程: ${currentTripId}`;
         let list = getTripList();
-        if (!list.includes(currentTripId)) { list.push(currentTripId); saveTripList(list); }
+        if (!list.includes(currentTripId)) { list.push(currentTripId); saveTripList(list); setupHomeListeners(); }
         settledTransactions = {};
         initFirestoreSync();
     }
 
-    let unsubscribeExpenses, unsubscribeSettings, unsubscribeSettled, unsubscribeInfo;
+    let unsubscribeExpenses, unsubscribeSettings, unsubscribeSettled;
     function initFirestoreSync() {
         if (!db) return;
         if (unsubscribeExpenses) unsubscribeExpenses();
         if (unsubscribeSettings) unsubscribeSettings();
         if (unsubscribeSettled) unsubscribeSettled();
-        if (unsubscribeInfo) unsubscribeInfo();
         const h = window.firebaseHelpers;
 
         unsubscribeExpenses = h.onSnapshot(h.collection(db, 'trips', currentTripId, 'expenses'), (snap) => {
@@ -509,11 +538,6 @@
             settledTransactions = snap.exists() ? snap.data().transactions || {} : {};
             if (document.getElementById('resultArea').innerHTML) generateFullReport();
         });
-
-        unsubscribeInfo = h.onSnapshot(h.doc(db, 'trips', currentTripId, 'info', 'data'), (snap) => {
-            if (snap.exists()) tripInfoCache[currentTripId] = snap.data();
-            renderTripList();
-        });
     }
 
     async function updateTripInfo() {
@@ -523,13 +547,8 @@
         const currency = getSelectedCurrency();
         try {
             await h.setDoc(h.doc(db, 'trips', currentTripId, 'info', 'data'), {
-                tripId: currentTripId,
-                customName: tripInfoCache[currentTripId]?.customName || '',
-                tripStartDate: document.getElementById('tripStartDate').value,
-                tripEndDate: document.getElementById('tripEndDate').value,
-                members,
-                currency,
                 totalExpense: total,
+                currency: currency,
                 lastUpdated: new Date().toISOString()
             }, { merge: true });
         } catch(e) { console.error(e); }
@@ -569,16 +588,11 @@
         };
         try {
             await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), data);
-            // 呢個係關鍵：儲存設定嗰陣，順手將最新嘅日期同團友寫入 `info`，等首頁即刻顯示到！
+            // 更新完設定，只需更新 info 嘅 lastUpdated，首頁會自動由 settings 監聽器攞到最新資料
             await h.setDoc(h.doc(db, 'trips', currentTripId, 'info', 'data'), {
-                tripId: currentTripId,
-                tripStartDate: data.tripStartDate,
-                tripEndDate: data.tripEndDate,
-                members: data.members,
-                currency: data.currency,
                 lastUpdated: new Date().toISOString()
             }, { merge: true });
-            
+
             updateSyncStatus(false);
             alert('✅ 設定已儲存');
         } catch (e) { console.error('設定儲存失敗:', e); updateSyncStatus(false); alert('❌ 儲存失敗: ' + (e.message || e)); }
