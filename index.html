@@ -290,20 +290,18 @@
     let db = null; let firebaseReady = false; let currentTripId = 'default';
     let members = ['A', 'B', 'C', 'D']; let expenses = []; let currentSplitMode = 'equal';
     let customAmounts = {}; let editingExpenseId = null; let settledTransactions = {};
-    let tripList = []; // 旅程清單
-    let tripInfoCache = {}; // 旅程資訊快取
+    let tripInfoCache = {};
     const today = new Date().toISOString().split('T')[0];
     const PRESET_CURRENCIES = ['HKD', 'TWD', 'JPY', 'KRW', 'USD'];
 
     document.getElementById('expenseDate').value = today;
 
-    // ========== 旅程清單管理 ==========
+    // ========== 旅程清單（只用 localStorage，唔會自動掃描）==========
     function getTripList() {
         try { return JSON.parse(localStorage.getItem('tripList') || '[]'); } catch(e) { return []; }
     }
     function saveTripList(list) {
         localStorage.setItem('tripList', JSON.stringify(list));
-        tripList = list;
     }
     function getLastTripId() { return localStorage.getItem('lastTripId') || 'default'; }
     function saveLastTripId(id) { localStorage.setItem('lastTripId', id); }
@@ -318,9 +316,7 @@
         document.getElementById('homePage').classList.add('page-hidden');
         document.getElementById('calculatorPage').classList.remove('page-hidden');
     }
-    function goHome() {
-        showHome();
-    }
+    function goHome() { showHome(); }
 
     // ========== 首頁清單渲染 ==========
     function renderTripList() {
@@ -333,7 +329,6 @@
             return;
         }
 
-        // 排序
         if (sortMode === 'lastUpdated') {
             list.sort((a, b) => {
                 const infoA = tripInfoCache[a] || {};
@@ -368,6 +363,7 @@
         container.innerHTML = html;
     }
 
+    // 從首頁移除旅程（只移除 localStorage，Firestore 保留）
     function removeTripFromList(tripId) {
         if (!confirm(`確定要從首頁移除「${tripId}」嗎？\n\n（Firestore 資料會保留，唔會刪除）`)) return;
         let list = getTripList().filter(id => id !== tripId);
@@ -403,14 +399,9 @@
         const start = document.getElementById('newTripStart').value;
         const end = document.getElementById('newTripEnd').value;
 
-        // 加入清單
         let list = getTripList();
-        if (!list.includes(code)) {
-            list.push(code);
-            saveTripList(list);
-        }
+        if (!list.includes(code)) { list.push(code); saveTripList(list); }
 
-        // 建立 info 文件
         if (db) {
             const h = window.firebaseHelpers;
             try {
@@ -439,33 +430,6 @@
         loadTripFromHome(code);
     }
 
-    // ========== 自動掃描舊旅程 ==========
-    async function scanExistingTrips() {
-        if (!db) return;
-        const h = window.firebaseHelpers;
-        try {
-            const tripsSnap = await h.getDocs(h.collection(db, 'trips'));
-            let list = getTripList();
-            let changed = false;
-            const promises = [];
-            tripsSnap.forEach(t => {
-                if (!list.includes(t.id)) {
-                    list.push(t.id);
-                    changed = true;
-                }
-                // 讀取 info
-                promises.push(h.getDocs(h.collection(db, 'trips', t.id, 'info')).then(snap => {
-                    if (!snap.empty) {
-                        tripInfoCache[t.id] = snap.docs[0].data();
-                    }
-                }).catch(()=>{}));
-            });
-            if (changed) saveTripList(list);
-            await Promise.all(promises);
-            renderTripList();
-        } catch(e) { console.error('掃描失敗:', e); }
-    }
-
     // ========== Firebase 同步 ==========
     function getSavedTripId() { const p = new URLSearchParams(window.location.search); return p.get('trip') || getLastTripId(); }
     currentTripId = getSavedTripId();
@@ -477,16 +441,13 @@
             db = window.db;
             firebaseReady = true;
             clearInterval(checkFirebase);
-            // 自動掃描舊旅程
-            scanExistingTrips().then(() => {
-                // 如果 lastTripId 存在，直接入計數機
-                if (getLastTripId()) {
-                    showCalculator();
-                    initFirestoreSync();
-                } else {
-                    showHome();
-                }
-            });
+            // 唔再自動掃描，直接根據 lastTripId 決定顯示邊個頁面
+            if (getLastTripId()) {
+                showCalculator();
+                initFirestoreSync();
+            } else {
+                showHome();
+            }
         }
     }, 100);
 
@@ -542,6 +503,7 @@
 
         unsubscribeInfo = h.onSnapshot(h.doc(db, 'trips', currentTripId, 'info', 'data'), (snap) => {
             if (snap.exists()) tripInfoCache[currentTripId] = snap.data();
+            renderTripList();
         });
     }
 
