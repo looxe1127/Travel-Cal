@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>資料拯救工具 V3</title>
+    <title>資料拯救工具 V4</title>
     <style>
         body { font-family: -apple-system, sans-serif; padding: 20px; text-align: center; background: #f5f5f5; }
         .card { background: white; padding: 20px; border-radius: 20px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
@@ -33,9 +33,9 @@
 </head>
 <body>
     <div class="card">
-        <h1>🚑 資料拯救工具 V3</h1>
-        <p>呢個工具會全資料庫搜尋所有含 `members` 嘅文件，並轉換成新旅程！</p>
-        <button id="rescueBtn" onclick="startRescue()">開始強制掃描</button>
+        <h1>🚑 資料拯救工具 V4</h1>
+        <p>搵到 290 筆記錄！呢個工具會暴力將佢哋搬返去新系統。</p>
+        <button id="rescueBtn" onclick="startRescue()">開始暴力搬運</button>
         <div id="log">準備中...\n</div>
     </div>
 
@@ -49,83 +49,93 @@
         async function startRescue() {
             const btn = document.getElementById('rescueBtn');
             btn.disabled = true;
-            btn.innerText = '掃描中...請等一等';
-            document.getElementById('log').innerText = '開始深層掃描...\n';
+            btn.innerText = '搬運中...請勿關閉';
+            document.getElementById('log').innerText = '開始掃描所有消費記錄...\n';
 
             const h = window.firebaseHelpers;
             const db = window.db;
             
             try {
-                // 呢個係 Firestore 嘅隱藏大絕，可以掃描所有 collection 入面叫 'config' 嘅文件
-                log("正在全庫搜尋設定檔...");
-                const configsSnap = await h.getDocs(h.collectionGroup(db, 'config'));
-                
-                let foundCount = 0;
-                
-                if (configsSnap.empty) {
-                    log("⚠️ 全個資料庫都搵唔到叫 'config' 嘅文件。");
-                    log("可能之前啲資料真係冇存到入 Firebase...");
-                } else {
-                    for (const docSnap of configsSnap.docs) {
-                        const data = docSnap.data();
-                        // 我哋只搵有 members 嘅
-                        if (data.members && Array.isArray(data.members)) {
-                            foundCount++;
-                            
-                            // 用 Document ID 做旅程代碼，如果係 'config' 就改做 'rescued_trip'
-                            let originalPath = docSnap.ref.path; 
-                            log(`\n🔍 搵到舊資料！路徑: ${originalPath}`);
-                            log(`   團友: ${data.members.join(', ')}`);
-                            
-                            // 嘗試估個 Code 名
-                            let tripCode = docSnap.id;
-                            if (tripCode === 'config' || tripCode === 'data') {
-                                // 如果個 doc 叫 config，睇下上一層個 collection 叫咩
-                                const pathParts = originalPath.split('/');
-                                tripCode = pathParts[pathParts.length - 3] || 'rescued_trip';
-                            }
+                // 1. 掃描全庫 expenses
+                const expensesSnap = await h.getDocs(h.collectionGroup(db, 'expenses'));
+                log(`總共搵到 ${expensesSnap.size} 筆記錄。\n`);
 
-                            log(`   ➡️ 準備搬運到新旅程代碼: ${tripCode}`);
-                            
-                            // 搬去新位置
-                            await h.setDoc(h.doc(db, 'trips', tripCode, 'settings', 'config'), data);
-                            
-                            // 建立首頁顯示用嘅 info
-                            await h.setDoc(h.doc(db, 'trips', tripCode, 'info', 'data'), {
-                                tripId: tripCode,
-                                customName: `救回-${tripCode}`,
-                                tripStartDate: data.tripStartDate || '',
-                                tripEndDate: data.tripEndDate || '',
-                                members: data.members,
-                                currency: data.currency || 'HKD',
-                                totalExpense: 0,
-                                lastUpdated: new Date().toISOString()
-                            });
-                            log(`   ✅ 成功轉移！`);
+                // 2. 整理資料，按「旅程代碼」分組
+                const groupedTrips = {};
+
+                expensesSnap.forEach(docSnap => {
+                    const path = docSnap.ref.path; // 例如: 1234/1234/expenses/xyz 或 trips/1234/expenses/xyz
+                    const parts = path.split('/');
+                    
+                    let tripCode = 'unknown';
+                    if (parts.length >= 4) {
+                        // 通常倒數第三個就係旅程代碼 (trips/{tripCode}/expenses/{id})
+                        tripCode = parts[parts.length - 3];
+                    } else if (parts.length === 3) {
+                        // 如果係 {tripCode}/expenses/{id}
+                        tripCode = parts[0];
+                    }
+
+                    // 如果個代碼叫 'trips' 或者 'expenses' 就跳過
+                    if (tripCode === 'trips' || tripCode === 'expenses') {
+                        // 可能係更深層，試下搵
+                        tripCode = parts[1] || 'recovered_trip';
+                    }
+
+                    if (!groupedTrips[tripCode]) {
+                        groupedTrips[tripCode] = [];
+                    }
+                    groupedTrips[tripCode].push({
+                        id: docSnap.id,
+                        data: docSnap.data()
+                    });
+                });
+
+                // 3. 逐個旅程搬運
+                let totalMoved = 0;
+                for (const [tripCode, expensesList] of Object.entries(groupedTrips)) {
+                    log(`\n📦 發現旅程: ${tripCode} (有 ${expensesList.length} 筆記錄)`);
+                    
+                    // 3a. 建立 info (俾首頁睇)
+                    await h.setDoc(h.doc(db, 'trips', tripCode, 'info', 'data'), {
+                        tripId: tripCode,
+                        customName: `救回 - ${tripCode}`,
+                        members: ['A','B','C','D'], // 因為搵唔到舊設定，比個預設值
+                        currency: expensesList[0].data.currency || 'HKD',
+                        totalExpense: expensesList.reduce((sum, item) => sum + (item.data.amount || 0), 0),
+                        lastUpdated: new Date().toISOString()
+                    });
+
+                    // 3b. 寫入所有 expenses (分批寫入，每次最多 400 筆)
+                    let batch = h.writeBatch(db);
+                    let count = 0;
+                    
+                    for (const item of expensesList) {
+                        const newDocRef = h.doc(db, 'trips', tripCode, 'expenses', item.id);
+                        batch.set(newDocRef, item.data);
+                        count++;
+                        
+                        if (count === 400) {
+                            await batch.commit();
+                            batch = h.writeBatch(db);
+                            count = 0;
                         }
                     }
+                    if (count > 0) {
+                        await batch.commit();
+                    }
+                    
+                    log(`   ✅ 成功搬運 ${expensesList.length} 筆記錄到新系統！`);
+                    totalMoved += expensesList.length;
                 }
 
-                // 再掃描 expenses (如果之前啲消費有入到)
-                log("\n正在全庫搜尋消費記錄...");
-                const expensesSnap = await h.getDocs(h.collectionGroup(db, 'expenses'));
-                if (!expensesSnap.empty) {
-                     log(`🎉 搵到總共 ${expensesSnap.size} 筆消費記錄！(但因為路徑太亂，可能未能完美對應，建議先救設定)`);
-                }
-
-                if (foundCount > 0) {
-                    log(`\n🎉 掃描完成！成功救回 ${foundCount} 個旅程。`);
-                    log(`請去返首頁撳「🔍 掃描舊旅程」睇下見唔見。`);
-                    btn.innerText = '✅ 掃描完成！';
-                } else {
-                    log(`\n⚠️ 掃描完成，但全庫都冇符合條件嘅舊設定。`);
-                    btn.innerText = '搵唔到資料';
-                }
+                log(`\n🎉 大功告成！總共救回 ${totalMoved} 筆記錄！`);
+                log(`請去返首頁撳「🔍 掃描舊旅程」就會見到。`);
+                btn.innerText = '✅ 搬運完成！';
 
             } catch (e) {
                 console.error(e);
                 log(`\n❌ 發生錯誤: ${e.message}`);
-                log(`💡 提示：可能係 Firestore 權限未開「collectionGroup」查詢，或者資料庫真係空。`);
                 btn.innerText = '❌ 發生錯誤';
             }
         }
