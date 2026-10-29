@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>資料拯救工具 V4</title>
+    <title>終極透視掃描器 V5</title>
     <style>
-        body { font-family: -apple-system, sans-serif; padding: 20px; text-align: center; background: #f5f5f5; }
-        .card { background: white; padding: 20px; border-radius: 20px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
-        button { background: #e65100; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 20px; }
+        body { font-family: -apple-system, sans-serif; padding: 20px; background: #f5f5f5; }
+        .card { background: white; padding: 20px; border-radius: 20px; max-width: 600px; margin: 0 auto; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; }
+        button { background: #0066cc; color: white; border: none; padding: 15px; font-size: 18px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; margin-bottom: 20px; }
         button:disabled { background: #ccc; }
-        #log { text-align: left; margin-top: 20px; background: #f9f9f9; padding: 15px; border-radius: 10px; font-size: 14px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
+        #log { text-align: left; background: #1e1e1e; color: #00ff00; padding: 15px; border-radius: 10px; font-size: 13px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; font-family: monospace; }
     </style>
     <script type="module">
         const firebaseConfig = {
@@ -22,20 +22,19 @@
             appId: "1:1085908469428:web:44ca879ccd8dcad38a39e1"
         };
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, doc, getDocs, setDoc, writeBatch, collectionGroup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, doc, getDocs, setDoc, collectionGroup } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        
         window.db = db;
-        window.firebaseHelpers = { collection, doc, getDocs, setDoc, writeBatch, collectionGroup };
+        window.h = { collection, doc, getDocs, setDoc, collectionGroup };
     </script>
 </head>
 <body>
     <div class="card">
-        <h1>🚑 資料拯救工具 V4</h1>
-        <p>搵到 290 筆記錄！呢個工具會暴力將佢哋搬返去新系統。</p>
-        <button id="rescueBtn" onclick="startRescue()">開始暴力搬運</button>
+        <h1>🔎 終極透視掃描器 V5</h1>
+        <p style="text-align:center; color:#666; font-size:14px;">呢個工具會將所有隱藏咗嘅路徑挖出嚟，強制幫你救返所有消費記錄。</p>
+        <button id="scanBtn" onclick="startScan()">開始深層透視掃描</button>
         <div id="log">準備中...\n</div>
     </div>
 
@@ -46,92 +45,69 @@
             logDiv.scrollTop = logDiv.scrollHeight;
         }
 
-        async function startRescue() {
-            const btn = document.getElementById('rescueBtn');
+        async function startScan() {
+            const btn = document.getElementById('scanBtn');
             btn.disabled = true;
-            btn.innerText = '搬運中...請勿關閉';
-            document.getElementById('log').innerText = '開始掃描所有消費記錄...\n';
+            btn.innerText = '掃描中...請勿關閉';
+            document.getElementById('log').innerText = '開始透視全資料庫...\n';
 
-            const h = window.firebaseHelpers;
-            const db = window.db;
-            
             try {
                 // 1. 掃描全庫 expenses
+                log("🔍 正在搜尋所有 expenses...");
                 const expensesSnap = await h.getDocs(h.collectionGroup(db, 'expenses'));
-                log(`總共搵到 ${expensesSnap.size} 筆記錄。\n`);
+                log(`✅ 總共搵到 ${expensesSnap.size} 筆記錄。\n`);
 
-                // 2. 整理資料，按「旅程代碼」分組
-                const groupedTrips = {};
-
+                // 2. 整理路徑
+                const pathMap = {};
                 expensesSnap.forEach(docSnap => {
-                    const path = docSnap.ref.path; // 例如: 1234/1234/expenses/xyz 或 trips/1234/expenses/xyz
+                    // 例如路徑係 1234/1234/expenses/abc
+                    const path = docSnap.ref.path; 
                     const parts = path.split('/');
+                    // 抽取出「上一層」嘅名做代碼
+                    const tripCodeGuess = parts[parts.length - 3];
                     
-                    let tripCode = 'unknown';
-                    if (parts.length >= 4) {
-                        // 通常倒數第三個就係旅程代碼 (trips/{tripCode}/expenses/{id})
-                        tripCode = parts[parts.length - 3];
-                    } else if (parts.length === 3) {
-                        // 如果係 {tripCode}/expenses/{id}
-                        tripCode = parts[0];
-                    }
-
-                    // 如果個代碼叫 'trips' 或者 'expenses' 就跳過
-                    if (tripCode === 'trips' || tripCode === 'expenses') {
-                        // 可能係更深層，試下搵
-                        tripCode = parts[1] || 'recovered_trip';
-                    }
-
-                    if (!groupedTrips[tripCode]) {
-                        groupedTrips[tripCode] = [];
-                    }
-                    groupedTrips[tripCode].push({
+                    if (!pathMap[tripCodeGuess]) pathMap[tripCodeGuess] = [];
+                    pathMap[tripCodeGuess].push({
                         id: docSnap.id,
                         data: docSnap.data()
                     });
                 });
 
-                // 3. 逐個旅程搬運
-                let totalMoved = 0;
-                for (const [tripCode, expensesList] of Object.entries(groupedTrips)) {
-                    log(`\n📦 發現旅程: ${tripCode} (有 ${expensesList.length} 筆記錄)`);
+                log("📂 發現以下潛在旅程：");
+                for (const [code, list] of Object.entries(pathMap)) {
+                    log(`   - ${code} (有 ${list.length} 筆記錄)`);
+                }
+                log("----------------------------------------");
+
+                // 3. 逐個搬去新位置
+                let movedCount = 0;
+                for (const [code, list] of Object.entries(pathMap)) {
+                    log(`\n📦 正在處理旅程: ${code}`);
                     
-                    // 3a. 建立 info (俾首頁睇)
-                    await h.setDoc(h.doc(db, 'trips', tripCode, 'info', 'data'), {
-                        tripId: tripCode,
-                        customName: `救回 - ${tripCode}`,
-                        members: ['A','B','C','D'], // 因為搵唔到舊設定，比個預設值
-                        currency: expensesList[0].data.currency || 'HKD',
-                        totalExpense: expensesList.reduce((sum, item) => sum + (item.data.amount || 0), 0),
+                    // 建立 info
+                    await h.setDoc(h.doc(db, 'trips', code, 'info', 'data'), {
+                        tripId: code,
+                        customName: `救回 - ${code}`,
+                        members: ['A','B','C','D'],
+                        currency: list[0].data.currency || 'HKD',
+                        totalExpense: list.reduce((s, x) => s + (x.data.amount || 0), 0),
                         lastUpdated: new Date().toISOString()
                     });
 
-                    // 3b. 寫入所有 expenses (分批寫入，每次最多 400 筆)
-                    let batch = h.writeBatch(db);
+                    // 搬 expenses
                     let count = 0;
-                    
-                    for (const item of expensesList) {
-                        const newDocRef = h.doc(db, 'trips', tripCode, 'expenses', item.id);
-                        batch.set(newDocRef, item.data);
+                    for (const item of list) {
+                        await h.setDoc(h.doc(db, 'trips', code, 'expenses', item.id), item.data);
                         count++;
-                        
-                        if (count === 400) {
-                            await batch.commit();
-                            batch = h.writeBatch(db);
-                            count = 0;
-                        }
-                    }
-                    if (count > 0) {
-                        await batch.commit();
                     }
                     
-                    log(`   ✅ 成功搬運 ${expensesList.length} 筆記錄到新系統！`);
-                    totalMoved += expensesList.length;
+                    log(`   ✅ 成功搬運 ${count} 筆！`);
+                    movedCount += count;
                 }
 
-                log(`\n🎉 大功告成！總共救回 ${totalMoved} 筆記錄！`);
-                log(`請去返首頁撳「🔍 掃描舊旅程」就會見到。`);
-                btn.innerText = '✅ 搬運完成！';
+                log(`\n🎉 大功告成！總共救回 ${movedCount} 筆記錄！`);
+                log(`請去首頁撳「🔍 載入舊旅程」，打以上見到嘅代碼（例如 1234）試吓！`);
+                btn.innerText = '✅ 掃描完成！';
 
             } catch (e) {
                 console.error(e);
