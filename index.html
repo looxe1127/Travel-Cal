@@ -1114,7 +1114,93 @@
     // 其他原有功能 (重置、清除、匯出Excel等)
     function resetExpenses() { if (confirm('確定要重設所有消費記錄嗎？\n\n團友名單同日期設定會保留。')) { clearAllFirestoreData().then(()=>{ document.getElementById('resultArea').innerHTML=''; customAmounts={}; cancelEdit(); updateTripInfo(); }); } }
     async function clearAllData() { if (confirm('確定要清除全部資料嗎？\n\n所有消費記錄、團友名單、日期同貨幣設定都會被刪除。\n\n呢個動作唔可以還原！')) { await clearAllFirestoreData(); members=['A','B','C','D']; document.getElementById('memberInput').value='A, B, C, D'; document.getElementById('tripStartDate').value=today; document.getElementById('tripEndDate').value=new Date(Date.now()+7*24*60*60*1000).toISOString().split('T')[0]; document.getElementById('currencySelect').value='HKD'; document.getElementById('customCurrencyInput').value=''; toggleCustomCurrencyInput(); document.getElementById('resultArea').innerHTML=''; cancelEdit(); saveSettings(); renderUI(); } }
-    function exportToExcel() { alert('Excel 匯出功能將於稍後更新。'); }
+    
+    // ========== 匯出 Excel 修復 ==========
+    function exportToExcel() {
+        if (!expenses.length) { alert('未有資料'); return; }
+        if (typeof XLSX==='undefined') { alert('Excel 組件載入中，請稍後再試'); return; }
+        showExchangeModal('excel'); // 借用匯率彈窗
+    }
+
+    function _exportToExcel(exchangeRate) {
+        const currency = getSelectedCurrency();
+        const wb = XLSX.utils.book_new();
+        const fmtAmt = (v) => exchangeRate ? [`${currency} $${v.toFixed(2)}`, `HKD $${(v * exchangeRate).toFixed(2)}`] : [`${currency} $${v.toFixed(2)}`];
+        const hdr = exchangeRate ? ['日期','階段','類別','描述','付款人','金額','金額 (HKD)','港幣結算(HKD)','付款方式','分賬方式','參與者','每人金額','每人金額 (HKD)'] : ['日期','階段','類別','描述','付款人','金額','港幣結算(HKD)','付款方式','分賬方式','參與者','每人金額'];
+        
+        const rowForExpense = (e) => {
+            const splitBase = e.splitMode === 'equal' ? `平均分 (每人 ${e.currency} $${(e.amount / e.sharedWith.length).toFixed(2)})` : e.sharedWith.map(m => `${m}:${e.splitDetails[m].toFixed(2)}`).join('; ');
+            const row = [e.date, e.stage || '當地消費', e.category, e.desc, e.payer, ...fmtAmt(e.amount), e.hkdSettlement || '', e.paymentMethod || '現金', e.splitMode === 'equal' ? '平均分' : '自訂金額', e.sharedWith.join(', ')];
+            row.push(splitBase);
+            if (exchangeRate) {
+                const splitHkd = e.splitMode === 'equal' ? `平均分 (每人 HKD $${((e.amount / e.sharedWith.length) * exchangeRate).toFixed(2)})` : e.sharedWith.map(m => `${m}: HKD $${(e.splitDetails[m] * exchangeRate).toFixed(2)}`).join('; ');
+                row.push(splitHkd);
+            }
+            return row;
+        };
+
+        const buildSheetData = (expenseList) => { 
+            if (!expenseList.length) return [hdr]; 
+            const sorted = [...expenseList].sort((a, b) => new Date(a.date) - new Date(b.date)); 
+            const data = [hdr]; 
+            let lastDate = ''; 
+            let totalAmount = 0; 
+            sorted.forEach(e => { 
+                if (e.date !== lastDate) { 
+                    if (lastDate !== '') data.push([]); 
+                    lastDate = e.date; 
+                } 
+                data.push(rowForExpense(e)); 
+                totalAmount += e.amount; 
+            }); 
+            const totalRow = ['', '', '', '', '總額', ...fmtAmt(totalAmount), '', '', '', '', '']; 
+            if (exchangeRate) totalRow.push(''); 
+            data.push([]); 
+            data.push(totalRow); 
+            return data; 
+        };
+
+        // Sheet 1: 消費明細
+        const detailData = buildSheetData(expenses);
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailData), "消費明細");
+
+        // 其他 Sheets (每日/分類)
+        const dateGroups = {}; expenses.forEach(e => { if (!dateGroups[e.date]) dateGroups[e.date] = []; dateGroups[e.date].push(e); }); 
+        Object.keys(dateGroups).sort().forEach(date => { const dayData = buildSheetData(dateGroups[date]); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dayData), date); });
+
+        const catGroups = {}; expenses.forEach(e => { if (!catGroups[e.category]) catGroups[e.category] = []; catGroups[e.category].push(e); }); 
+        Object.keys(catGroups).sort().forEach(cat => { const catData = buildSheetData(catGroups[cat]); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catData), cat); });
+
+        // 個人結餘與還款
+        const bal = {}; members.forEach(m => bal[m] = 0); 
+        expenses.forEach(e => { bal[e.payer] += e.amount; e.sharedWith.forEach(p => bal[p] -= e.splitDetails[p]); });
+        const sumHdr = ['團友', '總墊付', '總消費', '結餘', '狀態'];
+        const sumData = [['個人結餘'], sumHdr];
+        members.forEach(m => { 
+            const paid = expenses.filter(e => e.payer === m).reduce((s, e) => s + e.amount, 0); 
+            const consumed = expenses.reduce((s, e) => s + (e.splitDetails[m] || 0), 0); 
+            const b = bal[m]; 
+            sumData.push([m, `${currency} $${paid.toFixed(2)}`, `${currency} $${consumed.toFixed(2)}`, `${currency} $${Math.abs(b).toFixed(2)}`, b > 0 ? '收錢' : b < 0 ? '俾錢' : '無數']);
+        });
+        
+        sumData.push([]); sumData.push(['還款方案']); 
+        const txnHdr = ['付款人', '金額', '收款人']; sumData.push(txnHdr);
+        const creditors = [], debtors = []; 
+        members.forEach(m => { const b = bal[m]; if (Math.abs(b) < 0.001) bal[m] = 0; else if (b > 0) creditors.push({ name: m, amount: b }); else if (b < 0) debtors.push({ name: m, amount: -b }); }); 
+        creditors.sort((a, b) => b.amount - a.amount); debtors.sort((a, b) => b.amount - a.amount);
+        let ci = 0, di = 0; 
+        while (ci < creditors.length && di < debtors.length) { 
+            const c = creditors[ci], d = debtors[di]; 
+            const amt = Math.min(c.amount, d.amount); 
+            sumData.push([d.name, `${currency} $${amt.toFixed(2)}`, c.name]); 
+            c.amount -= amt; d.amount -= amt; 
+            if (c.amount < 0.001) ci++; if (d.amount < 0.001) di++; 
+        }
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sumData), "個人結餘與還款");
+
+        XLSX.writeFile(wb, `旅行分賬_${currentTripId}_${today}${exchangeRate ? '_已換算' : ''}.xlsx`);
+    }
+
     function exportBackup() { const data = { tripId: currentTripId, members, expenses, tripStartDate: document.getElementById('tripStartDate').value, tripEndDate: document.getElementById('tripEndDate').value, currency: getSelectedCurrency(), customCategories }; const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`旅行分賬備份_${currentTripId}_${today}.json`; a.click(); URL.revokeObjectURL(a.href); }
     async function importBackup(event) { const file=event.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async(e)=>{ try{ const data=JSON.parse(e.target.result); if(data.members){ members=data.members; document.getElementById('memberInput').value=members.join(', '); } if(data.tripStartDate) document.getElementById('tripStartDate').value=data.tripStartDate; if(data.tripEndDate) document.getElementById('tripEndDate').value=data.tripEndDate; if(data.currency) setSelectedCurrency(data.currency); if(data.customCategories) customCategories = data.customCategories; await saveSettings(); if(data.expenses){ for(const exp of data.expenses){ await saveExpenseToFirestore({...exp, id: exp.id||Date.now()+'-'+Math.random().toString(36)}); } } cancelEdit(); renderUI(); alert('✅ 備份匯入成功！'); } catch(err){ alert('❌ 檔案格式錯誤'); } }; reader.readAsText(file); event.target.value=''; }
 
@@ -1203,6 +1289,28 @@
                 renderUI();
                 alert('✅ 設定已儲存');
             } catch (e) { console.error(e); alert('❌ 儲存失敗'); }
+        }
+    }
+
+    // ========== 覆寫匯率套用邏輯 (加入 Excel 判斷) ==========
+    async function applyExchangeRate() { 
+        const rate = parseFloat(document.getElementById('exchangeRateInput').value), dir = document.getElementById('exchangeDirection').value; 
+        if (isNaN(rate)||rate<=0) { alert('請輸入有效匯率'); return; } 
+        let finalRate = dir==='1' ? rate : 1/rate;
+        
+        // 記憶匯率
+        if (db) {
+            const h = window.firebaseHelpers;
+            await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), { lastExchangeRate: finalRate }, { merge: true });
+            lastExchangeRate = finalRate;
+        }
+
+        hideExchangeModal(); 
+        
+        if (pendingReportType === 'excel') {
+            _exportToExcel(finalRate);
+        } else {
+            _generateFullReport(pendingReportType, finalRate);
         }
     }
 
