@@ -29,7 +29,6 @@
         h1 { font-size: 24px; margin: 0 0 6px; color: #1a1a1a; font-weight: 700; display: flex; align-items: center; gap: 8px; }
         h2 { font-size: 18px; margin: 16px 0 12px; color: #333; font-weight: 600; }
         .sub { color: #666; margin-bottom: 16px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
-        .sync-badge { background: #e8f5e9; color: #2e7d32; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 500; }
         
         .stage-tabs { display: flex; gap: 8px; margin-bottom: 12px; background: #f0f0f0; padding: 4px; border-radius: 12px; }
         .stage-tabs button { flex: 1; background: transparent; color: #666; min-height: 40px; border-radius: 8px; margin: 0; font-weight: 600; border: none; cursor: pointer; transition: 0.2s;}
@@ -59,11 +58,9 @@
         .expense-actions { display: flex; gap: 8px; margin-left: 8px; }
         .edit-btn { background: #e3f2fd; color: #1976d2; border-radius: 20px; padding: 6px 12px; font-size: 12px; width: auto; min-height: 32px; }
         .delete-btn { background: #ffebee; color: #c62828; border-radius: 20px; padding: 6px 12px; font-size: 12px; width: auto; min-height: 32px; }
-        .settle-btn { background: #e8f5e9; color: #2e7d32; border-radius: 20px; padding: 6px 12px; font-size: 12px; width: auto; min-height: 32px; }
         
         hr { margin: 16px 0; border: none; border-top: 1px solid #eee; }
         .total-hint { font-size: 13px; color: #666; margin-top: 4px; padding: 4px 0; }
-        .split-summary { font-size: 13px; color: #666; margin-top: 4px; line-height: 1.4; }
         
         .category-badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; margin-left: 6px; background: #eee; color: #333; }
         .category-餐飲 { background: #FFE0B2; color: #E65100; }
@@ -75,16 +72,15 @@
         .category-機票 { background: #E3F2FD; color: #0D47A1; }
         .category-酒店 { background: #E0F2F1; color: #004D40; }
         .category-網上Booking { background: #F3E5F5; color: #4A148C; }
-        .category-事前其他 { background: #FFF9C4; color: #F57F17; }        .table-wrapper { overflow-x: auto; margin: 12px 0; -webkit-overflow-scrolling: touch; }
+        .category-事前其他 { background: #FFF9C4; color: #F57F17; }
+
+        .table-wrapper { overflow-x: auto; margin: 12px 0; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; min-width: 350px; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
         th { background: #f5f5f5; font-weight: 600; }
         
         .summary-box { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 16px; border-radius: 16px; margin: 16px 0; }
         .summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 15px; }
-        .category-stat { display: flex; justify-content: space-between; align-items: center; margin: 8px 0; font-size: 13px; }
-        .progress-bar { flex: 1; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; margin: 0 8px; }
-        .progress-fill { height: 100%; background: white; border-radius: 4px; }
         
         .filter-bar { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
         @media (min-width: 500px) { .filter-bar { flex-direction: row; flex-wrap: wrap; } }
@@ -111,11 +107,6 @@
         
         .editing-mode { border: 2px solid #4a90d9; }
         .cancel-edit-btn { background: #999; margin-top: 8px; }
-        .participants-list { font-size: 13px; color: #444; margin-top: 4px; }
-        .payment-method-badge { font-size: 12px; margin-left: 8px; color: #555; }
-        .stage-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 6px; }
-        .stage-當地消費 { background: #E0F7FA; color: #006064; }
-        .stage-事前預訂 { background: #FFF3E0; color: #E65100; }
         
         .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: center; }
         .modal { background: white; border-radius: 16px; padding: 20px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
@@ -140,7 +131,6 @@
 </head>
 <body>
 
-<!-- 首頁 -->
 <div id="homePage" class="page-hidden">
     <div class="card">
         <div class="home-header">
@@ -161,7 +151,6 @@
     </div>
 </div>
 
-<!-- 計數機 -->
 <div id="calculatorPage" class="page-hidden">
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -170,7 +159,6 @@
         </div>
         <div class="sub">
             <span id="tripDisplay" style="font-weight: 600; font-size: 15px; color: #333;">📌 旅程: default</span>
-            <span id="syncStatus" class="sync-badge">✅</span>
         </div>
         <button class="settings-btn" onclick="openSettingsModal()">⚙️ 更新設定 (名稱、日期、團友、貨幣、類別)</button>
     </div>
@@ -188,9 +176,8 @@
             <div><label>💵 金額</label><input type="number" id="amountInput" placeholder="0.00" step="0.01" min="0" onchange="updateSplitPreview()" onkeyup="updateSplitPreview()"></div>
         </div>
         
-        <div class="form-grid" id="preTripCurrencyGrid" style="display: none; background: #fff3e0; padding: 10px; border-radius: 12px; margin-top: 6px;">
-            <div><label style="color: #e65100; font-weight: 600;">💵 港幣結算 (HKD)</label><input type="number" id="hkdSettlementInput" placeholder="必須填寫" step="0.01" min="0"></div>
-            <div id="preTripNoteContainer" style="display: none;"><label style="color: #e65100; font-weight: 600;">📝 備註</label><input type="text" id="preTripNoteInput" placeholder="例如: Klook 門票"></div>
+        <div class="form-grid" id="preTripNoteGrid" style="display: none; background: #fff3e0; padding: 10px; border-radius: 12px; margin-top: 6px;">
+            <div><label style="color: #e65100; font-weight: 600;">📝 Booking 備註</label><input type="text" id="preTripNoteInput" placeholder="例如: Klook 門票"></div>
         </div>
 
         <div class="form-grid">
@@ -235,8 +222,7 @@
         <input type="file" id="importFileInput" accept=".json" onchange="importBackup(event)">
         <div id="resultArea" style="margin-top: 20px;"></div>
     </div>
-</div><!-- Modals -->
-<div class="modal-overlay" id="settingsModal">
+</div><div class="modal-overlay" id="settingsModal">
     <div class="modal">
         <h3>⚙️ 更新設定</h3>
         <label>旅程名稱</label><input type="text" id="settingTripName">
@@ -329,20 +315,19 @@
     let db = null, currentTripId = 'default', members = ['A','B','C','D'], expenses = [];
     let currentSplitMode = 'equal', customAmounts = {}, editingExpenseId = null, settledTransactions = {};
     let homeDataCache = {}, currentExpenseStage = '當地消費', customCategories = [], lastExchangeRate = null;
-    let currentPage = localStorage.getItem('lastPage') || 'home';
     
+    // 記住上次喺邊一版
+    let currentPage = localStorage.getItem('lastPage') || 'home';
     const today = new Date().toISOString().split('T')[0];
     const LOCAL_CATS = ['餐飲', '交通', '景點', '購物', '便利店', '其他'];
     const PRE_CATS = ['機票', '酒店', '網上Booking', '事前其他'];
     document.getElementById('expenseDate').value = today;
 
-    // --- Storage ---
     const getTripList = () => JSON.parse(localStorage.getItem('tripList') || '[]');
     const saveTripList = (l) => localStorage.setItem('tripList', JSON.stringify(l));
     const getLastTripId = () => localStorage.getItem('lastTripId') || 'default';
     const saveLastTripId = (id) => localStorage.setItem('lastTripId', id);
 
-    // --- UI Switch ---
     function showHome() {
         currentPage = 'home'; localStorage.setItem('lastPage', 'home');
         document.getElementById('homePage').classList.remove('page-hidden');
@@ -354,10 +339,7 @@
         document.getElementById('homePage').classList.add('page-hidden');
         document.getElementById('calculatorPage').classList.remove('page-hidden');
     }
-    const goHome = showHome;
-
-    // --- Home List ---
-    function renderTripList() {
+    const goHome = showHome;    function renderTripList() {
         const container = document.getElementById('tripList');
         let list = getTripList();
         if (!list.length) { container.innerHTML = '<div class="empty-state">未有旅程</div>'; return; }
@@ -384,7 +366,8 @@
         container.innerHTML = html;
     }
     function removeTripFromList(id) { if(!confirm('確定移除？')) return; saveTripList(getTripList().filter(t=>t!==id)); delete homeDataCache[id]; renderTripList(); }
-    function loadTripFromHome(id) { currentTripId = id; saveLastTripId(id); document.getElementById('tripDisplay').innerHTML = `📌 旅程: ${id}`; showCalculator(); initSync(); }    // --- Modals ---
+    function loadTripFromHome(id) { currentTripId = id; saveLastTripId(id); document.getElementById('tripDisplay').innerHTML = `📌 旅程: ${id}`; showCalculator(); initSync(); }
+
     function openNewTripModal() { document.getElementById('newTripCode').value=''; document.getElementById('newTripName').value=''; document.getElementById('newTripStart').value=today; document.getElementById('newTripEnd').value=new Date(Date.now()+7*24*60*60*1000).toISOString().split('T')[0]; document.getElementById('newTripModal').style.display='flex'; }
     function openLoadTripModal() { document.getElementById('loadTripCode').value=''; document.getElementById('loadTripModal').style.display='flex'; }
     function openSettingsModal() {
@@ -473,7 +456,6 @@
         document.getElementById('loadTripModal').style.display='none'; loadTripFromHome(code);
     }
 
-    // --- Firebase Sync ---
     const checkFirebase = setInterval(() => {
         if (window.firebaseReady && window.db) {
             db = window.db; clearInterval(checkFirebase);
@@ -529,7 +511,7 @@
             if (snap.exists()) {
                 const d = snap.data();
                 members = d.members || ['A','B','C','D']; customCategories = d.customCategories || []; lastExchangeRate = d.lastExchangeRate || null;
-                if (d.currency) setSelectedCurrency(d.currency);
+                if (d.currency) document.getElementById('settingCurrencySelect').value = d.currency; // sync currency
                 renderUI();
             } else { saveSettings(); }
         });
@@ -544,7 +526,7 @@
         if (!db) return;
         const h = window.firebaseHelpers;
         let preTotal = 0, localTotal = 0;
-        expenses.forEach(e => { if (e.stage === '事前預訂') preTotal += (e.hkdSettlement || 0); else localTotal += e.amount; });
+        expenses.forEach(e => { if (e.stage === '事前預訂') preTotal += e.amount; else localTotal += e.amount; });
         let totalInHkd = preTotal; if (lastExchangeRate) totalInHkd += (localTotal * lastExchangeRate);
         try {
             await h.setDoc(h.doc(db, 'trips', currentTripId, 'info', 'data'), { preTotal, localTotal, totalInHkd: lastExchangeRate ? totalInHkd : null, currency: getSelectedCurrency(), lastUpdated: new Date().toISOString() }, { merge: true });
@@ -568,7 +550,7 @@
     async function saveSettings() {
         if (!db) return; const h = window.firebaseHelpers;
         try {
-            await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), { members, tripStartDate: document.getElementById('settingTripStartDate').value, tripEndDate: document.getElementById('settingTripEndDate').value, currency: getSelectedCurrency(), customCategories }, { merge: true });
+            await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), { members, currency: getSelectedCurrency(), customCategories }, { merge: true });
             updateTripInfo();
         } catch (e) {}
     }
@@ -580,7 +562,6 @@
         try { await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: settledTransactions }); } catch(e) {}
     }
 
-    // --- UI Logic ---
     function renderUI() { updateMemberSelect(); updateFilterPayer(); renderSplitArea(); renderExpenseList(); }
     function updateMemberSelect() { const s = document.getElementById('payerSelect'); s.innerHTML = ''; members.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); }
     function updateFilterPayer() { const s = document.getElementById('filterPayer'); s.innerHTML = '<option value="全部">全部人</option>'; members.forEach(m => { const o = document.createElement('option'); o.value = m; o.textContent = m; s.appendChild(o); }); }
@@ -591,23 +572,21 @@
     function toggleMemberTag(t) { t.classList.toggle('selected'); updateSplitPreview(); }
     function toggleOtherPaymentInput() { document.getElementById('otherPaymentContainer').style.display = document.getElementById('paymentMethodSelect').value==='其他'?'block':'none'; }
     function getPaymentMethod() { const m = document.getElementById('paymentMethodSelect').value; if (m==='其他') return document.getElementById('otherPaymentInput').value.trim() || '其他'; return m; }
+    
     function setExpenseStage(stage) {
         currentExpenseStage = stage;
         if (stage === '當地消費') {
             document.getElementById('stageLocalBtn').classList.add('active'); document.getElementById('stagePreBtn').classList.remove('active');
-            document.getElementById('preTripCurrencyGrid').style.display = 'none';
+            document.getElementById('preTripNoteGrid').style.display = 'none';
             document.getElementById('categorySelect').innerHTML = LOCAL_CATS.concat(customCategories).map(c => `<option value="${c}">${c}</option>`).join('');
         } else {
             document.getElementById('stagePreBtn').classList.add('active'); document.getElementById('stageLocalBtn').classList.remove('active');
-            document.getElementById('preTripCurrencyGrid').style.display = 'grid';
+            document.getElementById('preTripNoteGrid').style.display = 'block';
             document.getElementById('categorySelect').innerHTML = PRE_CATS.map(c => `<option value="${c}">${c}</option>`).join('');
-            togglePreTripNote();
         }
     }
-    document.getElementById('categorySelect').addEventListener('change', togglePreTripNote);
-    function togglePreTripNote() { document.getElementById('preTripNoteContainer').style.display = (currentExpenseStage === '事前預訂' && document.getElementById('categorySelect').value === '網上Booking') ? 'block' : 'none'; }
-    function setSelectedCurrency(c) { if (['HKD','TWD','JPY','KRW','THB'].includes(c)) { document.getElementById('currencySelect').value = c; } else { document.getElementById('currencySelect').value = 'CUSTOM'; } }
-    function getSelectedCurrency() { return homeDataCache[currentTripId]?.currency || 'HKD'; }
+    
+    function getSelectedCurrency() { return document.getElementById('settingCurrencySelect').value || 'HKD'; }
 
     function renderSplitArea() {
         const container = document.getElementById('splitArea');
@@ -631,25 +610,25 @@
     function saveExpense() {
         const payer = document.getElementById('payerSelect').value; const amount = parseFloat(document.getElementById('amountInput').value);
         const desc = document.getElementById('descInput').value || '消費'; const date = document.getElementById('expenseDate').value; const category = document.getElementById('categorySelect').value;
-        let hkdSettlement = parseFloat(document.getElementById('hkdSettlementInput').value) || 0; let preTripNote = document.getElementById('preTripNoteInput').value.trim();
+        let preTripNote = document.getElementById('preTripNoteInput').value.trim();
         if (isNaN(amount)||amount<=0) { alert('請輸入有效金額'); return; }
-        if (currentExpenseStage === '事前預訂') { if (getSelectedCurrency() !== 'HKD' && hkdSettlement <= 0) { alert('必須填寫 HKD 結算金額！'); return; } if (getSelectedCurrency() === 'HKD' && hkdSettlement <= 0) hkdSettlement = amount; } else { hkdSettlement = 0; preTripNote = ''; }
+        if (currentExpenseStage === '當地消費') { preTripNote = ''; }
         let sharedWith=[], splitDetails={};
         if (members.length <= 1) { sharedWith = members; splitDetails[members[0]] = amount; } 
         else { if (currentSplitMode==='equal') { document.querySelectorAll('.member-tag.selected').forEach(t=>sharedWith.push(t.dataset.member)); if (!sharedWith.length) { alert('請選擇團友'); return; } const pp = amount/sharedWith.length; sharedWith.forEach(m=>splitDetails[m]=pp); } else { let tc=0; members.forEach(m=>{ const v=customAmounts[m]||0; if(v>0){ sharedWith.push(m); splitDetails[m]=v; tc+=v; } }); if (Math.abs(tc-amount)>0.01) { alert('自訂金額不符'); return; } } }
-        saveExpenseToFirestore({ payer, amount, desc, date, category, currency: getSelectedCurrency(), paymentMethod: getPaymentMethod(), stage: currentExpenseStage, hkdSettlement, preTripNote, sharedWith, splitDetails, splitMode: currentSplitMode, id: editingExpenseId || Date.now()+'-'+Math.random().toString(36) });
+        saveExpenseToFirestore({ payer, amount, desc, date, category, currency: getSelectedCurrency(), paymentMethod: getPaymentMethod(), stage: currentExpenseStage, hkdSettlement: 0, preTripNote, sharedWith, splitDetails, splitMode: currentSplitMode, id: editingExpenseId || Date.now()+'-'+Math.random().toString(36) });
         cancelEdit();
     }
 
     function editExpense(id) {
         const e = expenses.find(x=>x.id===id); if (!e) return; editingExpenseId = id;
         setExpenseStage(e.stage || '當地消費'); document.getElementById('payerSelect').value = e.payer; document.getElementById('amountInput').value = e.amount; document.getElementById('expenseDate').value = e.date; document.getElementById('categorySelect').value = e.category; document.getElementById('descInput').value = e.desc;
-        if (e.stage === '事前預訂') { document.getElementById('hkdSettlementInput').value = e.hkdSettlement || ''; document.getElementById('preTripNoteInput').value = e.preTripNote || ''; }
+        document.getElementById('preTripNoteInput').value = e.preTripNote || '';
         document.getElementById('paymentMethodSelect').value = e.paymentMethod || '現金'; toggleOtherPaymentInput(); currentSplitMode = e.splitMode; setSplitMode(currentSplitMode); if (e.splitMode==='custom') customAmounts = {...e.splitDetails};
         document.getElementById('formTitle').innerHTML = '✏️ 編輯消費'; document.getElementById('saveExpenseBtn').innerHTML = '💾 儲存修改'; document.getElementById('cancelEditBtn').style.display='block'; document.getElementById('expenseFormCard').classList.add('editing-mode'); renderSplitArea();
     }
 
-    function cancelEdit() { editingExpenseId=null; document.getElementById('amountInput').value=''; document.getElementById('descInput').value=''; document.getElementById('expenseDate').value=today; document.getElementById('categorySelect').value='餐飲'; document.getElementById('hkdSettlementInput').value=''; document.getElementById('preTripNoteInput').value=''; customAmounts={}; document.getElementById('formTitle').innerHTML='➕ 新增消費'; document.getElementById('saveExpenseBtn').innerHTML='➕ 新增消費'; document.getElementById('cancelEditBtn').style.display='none'; document.getElementById('expenseFormCard').classList.remove('editing-mode'); setSplitMode('equal'); setExpenseStage('當地消費'); renderSplitArea(); }
+    function cancelEdit() { editingExpenseId=null; document.getElementById('amountInput').value=''; document.getElementById('descInput').value=''; document.getElementById('expenseDate').value=today; document.getElementById('categorySelect').value='餐飲'; document.getElementById('preTripNoteInput').value=''; customAmounts={}; document.getElementById('formTitle').innerHTML='➕ 新增消費'; document.getElementById('saveExpenseBtn').innerHTML='➕ 新增消費'; document.getElementById('cancelEditBtn').style.display='none'; document.getElementById('expenseFormCard').classList.remove('editing-mode'); setSplitMode('equal'); setExpenseStage('當地消費'); renderSplitArea(); }
     function deleteExpense(id) { if (confirm('確定刪除？')) { if (editingExpenseId===id) cancelEdit(); deleteExpenseFromFirestore(id); } }
 
     function renderExpenseList() {
@@ -661,13 +640,11 @@
         filtered.forEach(e => {
             if (e.date!==curDate) { curDate=e.date; const tot = filtered.filter(x=>x.date===e.date).reduce((s,x)=>s+x.amount,0); html += `<div class="day-summary"><strong>📅 ${e.date}</strong> <span>$${tot.toFixed(2)}</span></div>`; }
             let splitDesc = members.length > 1 ? (e.splitMode==='equal' ? `平均分` : `自訂`) : '無需分賬';
-            const hkdInfo = e.stage === '事前預訂' ? `<br><span style="color:#e65100; font-weight:bold; font-size:12px;">💵 HKD $${e.hkdSettlement.toFixed(2)}</span>` : '';
-            html += `<div class="expense-item"><div style="display:flex;justify-content:space-between;"><div><strong>${e.desc}</strong><span class="category-badge category-${e.category}">${e.category}</span></div><div class="expense-actions"><button class="edit-btn" onclick="editExpense('${e.id}')">✏️</button><button class="delete-btn" onclick="deleteExpense('${e.id}')">🗑️</button></div></div><div style="margin-top:4px; font-size:13px;">💸 ${e.payer} 俾咗 ${e.currency} $${e.amount.toFixed(2)}</div>${hkdInfo}</div>`;
+            html += `<div class="expense-item"><div style="display:flex;justify-content:space-between;"><div><strong>${e.desc}</strong><span class="category-badge category-${e.category}">${e.category}</span></div><div class="expense-actions"><button class="edit-btn" onclick="editExpense('${e.id}')">✏️</button><button class="delete-btn" onclick="deleteExpense('${e.id}')">🗑️</button></div></div><div style="margin-top:4px; font-size:13px;">💸 ${e.payer} 俾咗 ${e.currency} $${e.amount.toFixed(2)}</div></div>`;
         });
         container.innerHTML = html;
     }
 
-    // --- Report ---
     function generateFullReport() { if (!expenses.length) { alert('無記錄'); return; } document.getElementById('reportRangeModal').style.display = 'flex'; }
     function selectReportRange(type) { document.getElementById('reportRangeModal').style.display = 'none'; if (type === 'pre') _generateFullReport('pre', null); else { pendingReportType = type; showExchangeModal(); } }
     function showExchangeModal() {
@@ -684,12 +661,11 @@
     function _generateFullReport(type, exchangeRate) {
         const currency = getSelectedCurrency(); const balance = {}; members.forEach(m=>balance[m]=0);
         let totalPre=0, totalLocal=0;
-        expenses.forEach(e => { balance[e.payer] += e.amount; e.sharedWith.forEach(p=>balance[p]-=e.splitDetails[p]); if(e.stage==='事前預訂') totalPre+=e.hkdSettlement; else totalLocal+=e.amount; });
+        expenses.forEach(e => { balance[e.payer] += e.amount; e.sharedWith.forEach(p=>balance[p]-=e.splitDetails[p]); if(e.stage==='事前預訂') totalPre+=e.amount; else totalLocal+=e.amount; });
         let grand = totalPre + (totalLocal * (exchangeRate||0));
         const creditors=[], debtors=[]; members.forEach(m=>{ const b=balance[m]; if (Math.abs(b)<0.001) balance[m]=0; else if (b>0) creditors.push({name:m,amount:b}); else if (b<0) debtors.push({name:m,amount:-b}); }); creditors.sort((a,b)=>b.amount-a.amount); debtors.sort((a,b)=>b.amount-a.amount);
         const transactions=[]; let i=0,j=0; while(i<debtors.length&&j<creditors.length){ const d=debtors[i],c=creditors[j]; const amt=Math.min(d.amount,c.amount); transactions.push({from:d.name,to:c.name,amount:amt}); d.amount-=amt; c.amount-=amt; if(d.amount<0.001)i++; if(c.amount<0.001)j++; }
-        const fmt = v => exchangeRate ? `${currency} $${v.toFixed(2)} (≈HKD $${(v*exchangeRate).toFixed(2)})` : `${currency} $${v.toFixed(2)}`;
-        let html = `<div class="summary-box"><h3 style="margin-top:0;color:white;">📊 總結表</h3>${type==='total'?`<div class="summary-row"><span>💻 事前</span><span>HKD $${totalPre.toFixed(2)}</span></div><div class="summary-row"><span>📍 當地</span><span>${currency} $${totalLocal.toFixed(2)}</span></div><div class="summary-row" style="border-top:1px solid rgba(255,255,255,0.3);margin-top:4px;padding-top:8px;"><span>🌍 總計 (HKD)</span><span style="font-size:20px;font-weight:bold;">HKD $${grand.toFixed(2)}</span></div>`:type==='pre'?`<div class="summary-row"><span>💻 事前</span><span style="font-size:20px;font-weight:bold;">HKD $${totalPre.toFixed(2)}</span></div>`:`<div class="summary-row"><span>📍 當地</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalLocal.toFixed(2)}</span></div>`}</div>`;
+        let html = `<div class="summary-box"><h3 style="margin-top:0;color:white;">📊 總結表</h3>${type==='total'?`<div class="summary-row"><span>💻 事前</span><span>${currency} $${totalPre.toFixed(2)}</span></div><div class="summary-row"><span>📍 當地</span><span>${currency} $${totalLocal.toFixed(2)}</span></div><div class="summary-row" style="border-top:1px solid rgba(255,255,255,0.3);margin-top:4px;padding-top:8px;"><span>🌍 總計 (HKD)</span><span style="font-size:20px;font-weight:bold;">HKD $${grand.toFixed(2)}</span></div>`:type==='pre'?`<div class="summary-row"><span>💻 事前</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalPre.toFixed(2)}</span></div>`:`<div class="summary-row"><span>📍 當地</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalLocal.toFixed(2)}</span></div>`}</div>`;
         html += `<h3 style="font-size:15px;">👤 結餘</h3><div class="table-wrapper"><table><tr><th>團友</th><th>結餘</th></tr>`;
         members.forEach(m=>{ const bal=balance[m]; html += `<tr><td>${m}</td><td class="${bal>=0?'balance-positive':'balance-negative'}">${bal>0?'收':bal<0?'俾':'-'} ${Math.abs(bal).toFixed(2)}</td></tr>`; });
         html += `</table></div><h3 style="font-size:15px;">💸 還款</h3><div class="table-wrapper"><table>`;
@@ -699,23 +675,10 @@
         document.getElementById('resultArea').innerHTML = html; document.getElementById('resultArea').scrollIntoView({behavior:'smooth'});
     }
 
-    function exportToExcel() { if (!expenses.length) { alert('無記錄'); return; } alert('Excel 匯出功能稍後為你更新。'); }
+    function exportToExcel() { alert('Excel 稍後更新。'); }
+    async function resetExpenses() { if (confirm('確定重設？')) { if(db){ const b=window.firebaseHelpers.writeBatch(db); const s=await window.firebaseHelpers.getDocs(window.firebaseHelpers.collection(db,'trips',currentTripId,'expenses')); s.forEach(d=>b.delete(d.ref)); await b.commit(); } expenses=[]; renderExpenseList(); document.getElementById('resultArea').innerHTML=''; } }
+    async function clearAllData() { if(confirm('清空？')) { await resetExpenses(); } }
     
-    async function resetExpenses() { 
-        if (confirm('確定重設？')) { 
-            if(db){ 
-                const b=window.firebaseHelpers.writeBatch(db); 
-                const s=await window.firebaseHelpers.getDocs(window.firebaseHelpers.collection(db,'trips',currentTripId,'expenses')); 
-                s.forEach(d=>b.delete(d.ref)); 
-                await b.commit(); 
-            } 
-            expenses=[]; 
-            renderExpenseList(); 
-            document.getElementById('resultArea').innerHTML=''; 
-        } 
-    }
-    
-    // Init
     renderUI(); toggleOtherPaymentInput();
 </script>
 </body>
