@@ -176,8 +176,14 @@
             <div><label>💵 金額</label><input type="number" id="amountInput" placeholder="0.00" step="0.01" min="0" onchange="updateSplitPreview()" onkeyup="updateSplitPreview()"></div>
         </div>
         
-        <div class="form-grid" id="preTripNoteGrid" style="display: none; background: #fff3e0; padding: 10px; border-radius: 12px; margin-top: 6px;">
-            <div><label style="color: #e65100; font-weight: 600;">📝 Booking 備註</label><input type="text" id="preTripNoteInput" placeholder="例如: Klook 門票"></div>
+        <div class="form-grid" id="preTripCurrencyGrid" style="display: none; background: #fff3e0; padding: 10px; border-radius: 12px; margin-top: 6px;">
+            <div style="grid-column: span 2;">
+                <label style="color: #e65100; font-weight: 600;">💵 呢筆錢用咩貨幣入？</label>
+                <select id="preTripCurrencyType">
+                    <option value="local">當地貨幣 (總結時計匯率)</option>
+                    <option value="hkd">港幣 HKD</option>
+                </select>
+            </div>
         </div>
 
         <div class="form-grid">
@@ -233,7 +239,7 @@
         </div>
         <label>💰 貨幣</label>
         <select id="settingCurrencySelect" onchange="toggleSettingCustomCurrency()">
-            <option value="HKD">HKD</option><option value="TWD">TWD</option><option value="JPY">JPY</option><option value="KRW">KRW</option><option value="THB">THB</option><option value="CUSTOM">其他</option>
+            <option value="HKD">HKD 港幣</option><option value="TWD">TWD 台幣</option><option value="JPY">JPY 日圓</option><option value="KRW">KRW 韓元</option><option value="THB">THB 泰銖</option><option value="CUSTOM">其他</option>
         </select>
         <div id="settingCustomCurrencyContainer" style="display: none;"><label>自訂貨幣</label><input type="text" id="settingCustomCurrencyInput" maxlength="5"></div>
         <hr>
@@ -252,7 +258,13 @@
 <div class="modal-overlay" id="customCategoryModal">
     <div class="modal">
         <h3>➕ 自訂類別</h3>
-        <input type="text" id="newCategoryName" placeholder="名稱">
+        <label>加去邊度？</label>
+        <select id="newCategoryType">
+            <option value="local">📍 當地消費</option>
+            <option value="pre">💻 事前預訂</option>
+        </select>
+        <label>名稱</label>
+        <input type="text" id="newCategoryName" placeholder="例如: 按摩, 手信">
         <div class="modal-actions">
             <button onclick="addCustomCategory()" class="small">✅ 新增</button>
             <button onclick="document.getElementById('customCategoryModal').style.display='none'" class="small secondary">取消</button>
@@ -293,6 +305,10 @@
             <div><label>出發</label><input type="date" id="newTripStart"></div>
             <div><label>結束</label><input type="date" id="newTripEnd"></div>
         </div>
+        <label>基本貨幣</label>
+        <select id="newTripCurrency">
+            <option value="HKD">HKD 港幣</option><option value="TWD">TWD 台幣</option><option value="JPY">JPY 日圓</option><option value="KRW">KRW 韓元</option><option value="THB">THB 泰銖</option>
+        </select>
         <div class="modal-actions">
             <button onclick="createNewTrip()" class="small">✅ 建立</button>
             <button onclick="document.getElementById('newTripModal').style.display='none'" class="small secondary">取消</button>
@@ -315,12 +331,14 @@
     let db = null, currentTripId = 'default', members = ['A','B','C','D'], expenses = [];
     let currentSplitMode = 'equal', customAmounts = {}, editingExpenseId = null, settledTransactions = {};
     let homeDataCache = {}, currentExpenseStage = '當地消費', customCategories = [], lastExchangeRate = null;
+    let pendingReportType = 'total';
     
-    // 記住上次喺邊一版
     let currentPage = localStorage.getItem('lastPage') || 'home';
     const today = new Date().toISOString().split('T')[0];
-    const LOCAL_CATS = ['餐飲', '交通', '景點', '購物', '便利店', '其他'];
-    const PRE_CATS = ['機票', '酒店', '網上Booking', '事前其他'];
+    
+    const LOCAL_CATS = ['🍽️ 餐飲', '🚗 交通', '🎟️ 景點', '🛍️ 購物', '🏪 便利店', '📦 其他'];
+    const PRE_CATS = ['✈️ 機票', '🏨 酒店', '🌐 網上Booking', '📦 事前其他'];
+    
     document.getElementById('expenseDate').value = today;
 
     const getTripList = () => JSON.parse(localStorage.getItem('tripList') || '[]');
@@ -353,7 +371,7 @@
             const ppl = (info.members && info.members.length) ? info.members.join('、') : '未設定';
             
             let total = '';
-            if (info.preTotal > 0) total += `💻 事前: HKD $${info.preTotal.toFixed(2)}<br>`;
+            if (info.preTotal > 0) total += `💻 事前: ${info.currency} $${info.preTotal.toFixed(2)}<br>`;
             if (info.localTotal > 0) total += `📍 當地: ${info.currency} $${info.localTotal.toFixed(2)}<br>`;
             if (info.totalInHkd > 0) total += `🌍 Total: HKD $${info.totalInHkd.toFixed(2)}`;
             if (total === '') total = '未有消費';
@@ -368,8 +386,9 @@
     function removeTripFromList(id) { if(!confirm('確定移除？')) return; saveTripList(getTripList().filter(t=>t!==id)); delete homeDataCache[id]; renderTripList(); }
     function loadTripFromHome(id) { currentTripId = id; saveLastTripId(id); document.getElementById('tripDisplay').innerHTML = `📌 旅程: ${id}`; showCalculator(); initSync(); }
 
-    function openNewTripModal() { document.getElementById('newTripCode').value=''; document.getElementById('newTripName').value=''; document.getElementById('newTripStart').value=today; document.getElementById('newTripEnd').value=new Date(Date.now()+7*24*60*60*1000).toISOString().split('T')[0]; document.getElementById('newTripModal').style.display='flex'; }
+    function openNewTripModal() { document.getElementById('newTripCode').value=''; document.getElementById('newTripName').value=''; document.getElementById('newTripStart').value=today; document.getElementById('newTripEnd').value=new Date(Date.now()+7*24*60*60*1000).toISOString().split('T')[0]; document.getElementById('newTripCurrency').value='HKD'; document.getElementById('newTripModal').style.display='flex'; }
     function openLoadTripModal() { document.getElementById('loadTripCode').value=''; document.getElementById('loadTripModal').style.display='flex'; }
+    
     function openSettingsModal() {
         document.getElementById('settingTripName').value = homeDataCache[currentTripId]?.customName || '';
         document.getElementById('settingMemberInput').value = members.join(', ');
@@ -381,16 +400,29 @@
     }
     function closeSettingsModal() { document.getElementById('settingsModal').style.display = 'none'; }
     function toggleSettingCustomCurrency() { document.getElementById('settingCustomCurrencyContainer').style.display = document.getElementById('settingCurrencySelect').value === 'CUSTOM' ? 'block' : 'none'; }
-    function setSettingCurrency(c) { const sel = document.getElementById('settingCurrencySelect'); if(['HKD','TWD','JPY','KRW','THB'].includes(c)){ sel.value=c; document.getElementById('settingCustomCurrencyInput').value=''; } else { sel.value='CUSTOM'; document.getElementById('settingCustomCurrencyInput').value=c; } toggleSettingCustomCurrency(); }
+    function setSettingCurrency(c) { 
+        const sel = document.getElementById('settingCurrencySelect'); 
+        if(['HKD','TWD','JPY','KRW','THB'].includes(c)){ sel.value=c; document.getElementById('settingCustomCurrencyInput').value=''; } 
+        else { sel.value='CUSTOM'; document.getElementById('settingCustomCurrencyInput').value=c; } 
+        toggleSettingCustomCurrency(); 
+    }
     function getSettingCurrency() { const sel = document.getElementById('settingCurrencySelect'); return sel.value === 'CUSTOM' ? (document.getElementById('settingCustomCurrencyInput').value.trim().toUpperCase() || 'CUSTOM') : sel.value; }
 
     function renderCustomCategoryList() {
         const c = document.getElementById('customCategoryList');
         if (!customCategories.length) { c.innerHTML = '<span style="color:#999;">未有自訂類別</span>'; return; }
-        c.innerHTML = customCategories.map((cat, idx) => `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:4px 0;"><span>${cat}</span><button onclick="removeCustomCategory(${idx})" style="background:none; color:#c62828; border:none; padding:0; font-size:14px; cursor:pointer;">❌</button></div>`).join('');
+        c.innerHTML = customCategories.map((catObj, idx) => `<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding:4px 0;"><span>${catObj.name} (${catObj.type === 'local' ? '當地' : '事前'})</span><button onclick="removeCustomCategory(${idx})" style="background:none; color:#c62828; border:none; padding:0; font-size:14px; cursor:pointer;">❌</button></div>`).join('');
     }
     function openCustomCategoryModal() { document.getElementById('newCategoryName').value = ''; document.getElementById('customCategoryModal').style.display = 'flex'; }
-    function addCustomCategory() { const name = document.getElementById('newCategoryName').value.trim(); if (!name) return; if (LOCAL_CATS.includes(name) || PRE_CATS.includes(name)) { alert('已存在'); return; } customCategories.push(name); renderCustomCategoryList(); document.getElementById('customCategoryModal').style.display = 'none'; }
+    function addCustomCategory() { 
+        const name = document.getElementById('newCategoryName').value.trim(); 
+        const type = document.getElementById('newCategoryType').value;
+        if (!name) return; 
+        if (LOCAL_CATS.includes(name) || PRE_CATS.includes(name) || customCategories.some(c=>c.name===name)) { alert('已存在'); return; } 
+        customCategories.push({ name, type }); 
+        renderCustomCategoryList(); 
+        document.getElementById('customCategoryModal').style.display = 'none'; 
+    }
     function removeCustomCategory(idx) { customCategories.splice(idx, 1); renderCustomCategoryList(); }
 
     async function saveSettingsFromModal() {
@@ -425,6 +457,7 @@
         const name = document.getElementById('newTripName').value.trim();
         const start = document.getElementById('newTripStart').value;
         const end = document.getElementById('newTripEnd').value;
+        const cur = document.getElementById('newTripCurrency').value;
         const newMembers = document.getElementById('newTripMembers').value.split(',').map(s=>s.trim()).filter(s=>s);
         if (!newMembers.length) { alert('請輸入至少一位團友'); return; }
 
@@ -438,7 +471,7 @@
                     alert('✅ 呢個代碼已經存在，幫你直接載入！');
                 } else {
                     await h.setDoc(h.doc(db, 'trips', code, 'settings', 'config'), {
-                        members: newMembers, tripStartDate: start, tripEndDate: end, currency: 'HKD', customCategories: []
+                        members: newMembers, tripStartDate: start, tripEndDate: end, currency: cur, customCategories: []
                     });
                     await h.setDoc(h.doc(db, 'trips', code, 'info', 'data'), {
                         customName: name, lastUpdated: new Date().toISOString(), createdAt: new Date().toISOString()
@@ -511,7 +544,7 @@
             if (snap.exists()) {
                 const d = snap.data();
                 members = d.members || ['A','B','C','D']; customCategories = d.customCategories || []; lastExchangeRate = d.lastExchangeRate || null;
-                if (d.currency) document.getElementById('settingCurrencySelect').value = d.currency; // sync currency
+                if (d.currency) setSettingCurrency(d.currency);
                 renderUI();
             } else { saveSettings(); }
         });
@@ -577,16 +610,18 @@
         currentExpenseStage = stage;
         if (stage === '當地消費') {
             document.getElementById('stageLocalBtn').classList.add('active'); document.getElementById('stagePreBtn').classList.remove('active');
-            document.getElementById('preTripNoteGrid').style.display = 'none';
-            document.getElementById('categorySelect').innerHTML = LOCAL_CATS.concat(customCategories).map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('preTripCurrencyGrid').style.display = 'none';
+            const localCustom = customCategories.filter(c => c.type === 'local').map(c => c.name);
+            document.getElementById('categorySelect').innerHTML = LOCAL_CATS.concat(localCustom).map(c => `<option value="${c}">${c}</option>`).join('');
         } else {
             document.getElementById('stagePreBtn').classList.add('active'); document.getElementById('stageLocalBtn').classList.remove('active');
-            document.getElementById('preTripNoteGrid').style.display = 'block';
-            document.getElementById('categorySelect').innerHTML = PRE_CATS.map(c => `<option value="${c}">${c}</option>`).join('');
+            document.getElementById('preTripCurrencyGrid').style.display = 'block';
+            const preCustom = customCategories.filter(c => c.type === 'pre').map(c => c.name);
+            document.getElementById('categorySelect').innerHTML = PRE_CATS.concat(preCustom).map(c => `<option value="${c}">${c}</option>`).join('');
         }
     }
     
-    function getSelectedCurrency() { return document.getElementById('settingCurrencySelect').value || 'HKD'; }
+    function getSelectedCurrency() { return homeDataCache[currentTripId]?.currency || 'HKD'; }
 
     function renderSplitArea() {
         const container = document.getElementById('splitArea');
@@ -610,25 +645,30 @@
     function saveExpense() {
         const payer = document.getElementById('payerSelect').value; const amount = parseFloat(document.getElementById('amountInput').value);
         const desc = document.getElementById('descInput').value || '消費'; const date = document.getElementById('expenseDate').value; const category = document.getElementById('categorySelect').value;
-        let preTripNote = document.getElementById('preTripNoteInput').value.trim();
         if (isNaN(amount)||amount<=0) { alert('請輸入有效金額'); return; }
-        if (currentExpenseStage === '當地消費') { preTripNote = ''; }
+        
+        let finalCurrency = getSelectedCurrency();
+        if (currentExpenseStage === '事前預訂') {
+            const type = document.getElementById('preTripCurrencyType').value;
+            if (type === 'hkd') finalCurrency = 'HKD';
+        }
+
         let sharedWith=[], splitDetails={};
         if (members.length <= 1) { sharedWith = members; splitDetails[members[0]] = amount; } 
         else { if (currentSplitMode==='equal') { document.querySelectorAll('.member-tag.selected').forEach(t=>sharedWith.push(t.dataset.member)); if (!sharedWith.length) { alert('請選擇團友'); return; } const pp = amount/sharedWith.length; sharedWith.forEach(m=>splitDetails[m]=pp); } else { let tc=0; members.forEach(m=>{ const v=customAmounts[m]||0; if(v>0){ sharedWith.push(m); splitDetails[m]=v; tc+=v; } }); if (Math.abs(tc-amount)>0.01) { alert('自訂金額不符'); return; } } }
-        saveExpenseToFirestore({ payer, amount, desc, date, category, currency: getSelectedCurrency(), paymentMethod: getPaymentMethod(), stage: currentExpenseStage, hkdSettlement: 0, preTripNote, sharedWith, splitDetails, splitMode: currentSplitMode, id: editingExpenseId || Date.now()+'-'+Math.random().toString(36) });
+        saveExpenseToFirestore({ payer, amount, desc, date, category, currency: finalCurrency, paymentMethod: getPaymentMethod(), stage: currentExpenseStage, sharedWith, splitDetails, splitMode: currentSplitMode, id: editingExpenseId || Date.now()+'-'+Math.random().toString(36) });
         cancelEdit();
     }
 
     function editExpense(id) {
         const e = expenses.find(x=>x.id===id); if (!e) return; editingExpenseId = id;
         setExpenseStage(e.stage || '當地消費'); document.getElementById('payerSelect').value = e.payer; document.getElementById('amountInput').value = e.amount; document.getElementById('expenseDate').value = e.date; document.getElementById('categorySelect').value = e.category; document.getElementById('descInput').value = e.desc;
-        document.getElementById('preTripNoteInput').value = e.preTripNote || '';
+        if (e.stage === '事前預訂') { document.getElementById('preTripCurrencyType').value = (e.currency === 'HKD') ? 'hkd' : 'local'; }
         document.getElementById('paymentMethodSelect').value = e.paymentMethod || '現金'; toggleOtherPaymentInput(); currentSplitMode = e.splitMode; setSplitMode(currentSplitMode); if (e.splitMode==='custom') customAmounts = {...e.splitDetails};
         document.getElementById('formTitle').innerHTML = '✏️ 編輯消費'; document.getElementById('saveExpenseBtn').innerHTML = '💾 儲存修改'; document.getElementById('cancelEditBtn').style.display='block'; document.getElementById('expenseFormCard').classList.add('editing-mode'); renderSplitArea();
     }
 
-    function cancelEdit() { editingExpenseId=null; document.getElementById('amountInput').value=''; document.getElementById('descInput').value=''; document.getElementById('expenseDate').value=today; document.getElementById('categorySelect').value='餐飲'; document.getElementById('preTripNoteInput').value=''; customAmounts={}; document.getElementById('formTitle').innerHTML='➕ 新增消費'; document.getElementById('saveExpenseBtn').innerHTML='➕ 新增消費'; document.getElementById('cancelEditBtn').style.display='none'; document.getElementById('expenseFormCard').classList.remove('editing-mode'); setSplitMode('equal'); setExpenseStage('當地消費'); renderSplitArea(); }
+    function cancelEdit() { editingExpenseId=null; document.getElementById('amountInput').value=''; document.getElementById('descInput').value=''; document.getElementById('expenseDate').value=today; document.getElementById('categorySelect').value=LOCAL_CATS[0]; customAmounts={}; document.getElementById('formTitle').innerHTML='➕ 新增消費'; document.getElementById('saveExpenseBtn').innerHTML='➕ 新增消費'; document.getElementById('cancelEditBtn').style.display='none'; document.getElementById('expenseFormCard').classList.remove('editing-mode'); setSplitMode('equal'); setExpenseStage('當地消費'); renderSplitArea(); }
     function deleteExpense(id) { if (confirm('確定刪除？')) { if (editingExpenseId===id) cancelEdit(); deleteExpenseFromFirestore(id); } }
 
     function renderExpenseList() {
@@ -639,8 +679,7 @@
         let html = `<h3 style="font-size:16px;">📋 記錄 (${filtered.length} 筆)</h3>`, curDate='';
         filtered.forEach(e => {
             if (e.date!==curDate) { curDate=e.date; const tot = filtered.filter(x=>x.date===e.date).reduce((s,x)=>s+x.amount,0); html += `<div class="day-summary"><strong>📅 ${e.date}</strong> <span>$${tot.toFixed(2)}</span></div>`; }
-            let splitDesc = members.length > 1 ? (e.splitMode==='equal' ? `平均分` : `自訂`) : '無需分賬';
-            html += `<div class="expense-item"><div style="display:flex;justify-content:space-between;"><div><strong>${e.desc}</strong><span class="category-badge category-${e.category}">${e.category}</span></div><div class="expense-actions"><button class="edit-btn" onclick="editExpense('${e.id}')">✏️</button><button class="delete-btn" onclick="deleteExpense('${e.id}')">🗑️</button></div></div><div style="margin-top:4px; font-size:13px;">💸 ${e.payer} 俾咗 ${e.currency} $${e.amount.toFixed(2)}</div></div>`;
+            html += `<div class="expense-item"><div style="display:flex;justify-content:space-between;"><div><strong>${e.desc}</strong><span class="category-badge category-${e.category.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')}">${e.category}</span></div><div class="expense-actions"><button class="edit-btn" onclick="editExpense('${e.id}')">✏️</button><button class="delete-btn" onclick="deleteExpense('${e.id}')">🗑️</button></div></div><div style="margin-top:4px; font-size:13px;">💸 ${e.payer} 俾咗 ${e.currency} $${e.amount.toFixed(2)}</div></div>`;
         });
         container.innerHTML = html;
     }
@@ -660,11 +699,17 @@
 
     function _generateFullReport(type, exchangeRate) {
         const currency = getSelectedCurrency(); const balance = {}; members.forEach(m=>balance[m]=0);
-        let totalPre=0, totalLocal=0;
-        expenses.forEach(e => { balance[e.payer] += e.amount; e.sharedWith.forEach(p=>balance[p]-=e.splitDetails[p]); if(e.stage==='事前預訂') totalPre+=e.amount; else totalLocal+=e.amount; });
-        let grand = totalPre + (totalLocal * (exchangeRate||0));
+        let totalPre=0, totalLocal=0, totalHkdPre=0;
+        expenses.forEach(e => { 
+            balance[e.payer] += e.amount; e.sharedWith.forEach(p=>balance[p]-=e.splitDetails[p]); 
+            if(e.stage==='事前預訂') { totalPre+=e.amount; if(e.currency==='HKD') totalHkdPre += e.amount; else if(exchangeRate) totalHkdPre += (e.amount * exchangeRate); } 
+            else totalLocal+=e.amount; 
+        });
+        let grand = totalHkdPre + (totalLocal * (exchangeRate||0));
+        
         const creditors=[], debtors=[]; members.forEach(m=>{ const b=balance[m]; if (Math.abs(b)<0.001) balance[m]=0; else if (b>0) creditors.push({name:m,amount:b}); else if (b<0) debtors.push({name:m,amount:-b}); }); creditors.sort((a,b)=>b.amount-a.amount); debtors.sort((a,b)=>b.amount-a.amount);
         const transactions=[]; let i=0,j=0; while(i<debtors.length&&j<creditors.length){ const d=debtors[i],c=creditors[j]; const amt=Math.min(d.amount,c.amount); transactions.push({from:d.name,to:c.name,amount:amt}); d.amount-=amt; c.amount-=amt; if(d.amount<0.001)i++; if(c.amount<0.001)j++; }
+        
         let html = `<div class="summary-box"><h3 style="margin-top:0;color:white;">📊 總結表</h3>${type==='total'?`<div class="summary-row"><span>💻 事前</span><span>${currency} $${totalPre.toFixed(2)}</span></div><div class="summary-row"><span>📍 當地</span><span>${currency} $${totalLocal.toFixed(2)}</span></div><div class="summary-row" style="border-top:1px solid rgba(255,255,255,0.3);margin-top:4px;padding-top:8px;"><span>🌍 總計 (HKD)</span><span style="font-size:20px;font-weight:bold;">HKD $${grand.toFixed(2)}</span></div>`:type==='pre'?`<div class="summary-row"><span>💻 事前</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalPre.toFixed(2)}</span></div>`:`<div class="summary-row"><span>📍 當地</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalLocal.toFixed(2)}</span></div>`}</div>`;
         html += `<h3 style="font-size:15px;">👤 結餘</h3><div class="table-wrapper"><table><tr><th>團友</th><th>結餘</th></tr>`;
         members.forEach(m=>{ const bal=balance[m]; html += `<tr><td>${m}</td><td class="${bal>=0?'balance-positive':'balance-negative'}">${bal>0?'收':bal<0?'俾':'-'} ${Math.abs(bal).toFixed(2)}</td></tr>`; });
