@@ -691,28 +691,17 @@
         container.innerHTML = html;
     }
 
-            function _generateFullReport(type, exchangeRate) {
-        const currency = getSelectedCurrency(); 
-        const balance = {}; 
-        members.forEach(m => balance[m] = 0);
+                function _generateFullReport(type, exchangeRate) {
+        const currency = getSelectedCurrency(); const balance = {}; members.forEach(m=>balance[m]=0);
+        let totalPreHkd=0, totalLocalOriginal=0, totalLocalHkd=0;
         
-        // 計算每人墊付 (用原幣計)
-        expenses.forEach(e => { 
-            if (type === 'pre' && e.stage !== '事前預訂') return;
-            if (type === 'local' && e.stage === '事前預訂') return;
-            
-            balance[e.payer] += e.amount; 
-            e.sharedWith.forEach(p => balance[p] -= e.splitDetails[p]); 
-        });
-
-        let totalPreHkd = 0, totalLocalOriginal = 0, totalLocalHkd = 0, grandTotalHkd = 0;
-        const catTotalHkd = {}; 
-        const catTotalLocal = {};
-
+        expenses.forEach(e => { balance[e.payer] += e.amount; e.sharedWith.forEach(p=>balance[p]-=e.splitDetails[p]); });
+        
+        const catTotalHkd = {}; const catTotalLocal = {};
         expenses.forEach(e => {
             if (type === 'pre' && e.stage !== '事前預訂') return;
             if (type === 'local' && e.stage === '事前預訂') return;
-
+            
             if (e.stage === '事前預訂') {
                 let hkd = e.currency === 'HKD' ? e.amount : (e.amount * (exchangeRate || 0));
                 totalPreHkd += hkd;
@@ -727,111 +716,114 @@
             }
         });
         
-        if (exchangeRate) grandTotalHkd = totalPreHkd + totalLocalHkd;
-        else grandTotalHkd = totalPreHkd; // 如果冇匯率(例如只看事前)，就淨係計事前
+        let grandTotalHkd = totalPreHkd + (exchangeRate ? totalLocalHkd : 0);
 
-        // 計算還款 (用原幣結餘計，再按匯率轉換)
-        const creditors = [], debtors = [];
-        members.forEach(m => {
-            const b = balance[m];
-            if (Math.abs(b) < 0.001) balance[m] = 0;
-            else if (b > 0) creditors.push({ name: m, amount: b });
-            else if (b < 0) debtors.push({ name: m, amount: -b });
-        });
-        creditors.sort((a, b) => b.amount - a.amount);
-        debtors.sort((a, b) => b.amount - a.amount);
+        const creditors=[], debtors=[]; members.forEach(m=>{ const b=balance[m]; if (Math.abs(b)<0.001) balance[m]=0; else if (b>0) creditors.push({name:m,amount:b}); else if (b<0) debtors.push({name:m,amount:-b}); }); creditors.sort((a,b)=>b.amount-a.amount); debtors.sort((a,b)=>b.amount-a.amount);
+        const transactions=[]; let i=0,j=0; while(i<debtors.length&&j<creditors.length){ const d=debtors[i],c=creditors[j]; const amt=Math.min(d.amount,c.amount); transactions.push({from:d.name,to:c.name,amount:amt}); d.amount-=amt; c.amount-=amt; if(d.amount<0.001)i++; if(c.amount<0.001)j++; }
 
-        const transactions = [];
-        let i = 0, j = 0;
-        while (i < debtors.length && j < creditors.length) {
-            const d = debtors[i], c = creditors[j];
-            const amt = Math.min(d.amount, c.amount);
-            transactions.push({ from: d.name, to: c.name, amount: amt });
-            d.amount -= amt; c.amount -= amt;
-            if (d.amount < 0.001) i++;
-            if (c.amount < 0.001) j++;
-        }
+        let title = type === 'pre' ? '💻 事前預訂 (全部以 HKD 顯示)' : type === 'local' ? '📍 當地消費' : '🌍 全部 Total';
 
-        // 設定標題同顯示文字
-        let title = '🌍 全部 Total';
-        if (type === 'pre') title = '💻 事前預訂 (全部以 HKD 顯示)';
-        if (type === 'local') title = '📍 當地消費 (原幣)';
-
-        let html = `<div class="summary-box">
-            <h3 style="margin-top:0;color:white;">📊 總結表 - ${title}</h3>
-            ${type === 'pre' 
-                ? `<div class="summary-row"><span>💻 事前預訂總額</span><span style="font-size:20px;font-weight:bold;">HKD $${totalPreHkd.toFixed(2)}</span></div>`
-                : type === 'local' 
-                ? `<div class="summary-row"><span>📍 當地消費總額</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalLocalOriginal.toFixed(2)}</span></div>
-                   ${exchangeRate ? `<div class="summary-row"><span>📍 換算 HKD</span><span>HKD $${totalLocalHkd.toFixed(2)}</span></div>` : ''}`
-                : `<div class="summary-row"><span>💻 事前預訂</span><span>HKD $${totalPreHkd.toFixed(2)}</span></div>
-                   <div class="summary-row"><span>📍 當地消費</span><span>${currency} $${totalLocalOriginal.toFixed(2)} (≈HKD $${totalLocalHkd.toFixed(2)})</span></div>
-                   <div class="summary-row" style="border-top:1px solid rgba(255,255,255,0.3);margin-top:8px;padding-top:8px;"><span>🌍 總計 (HKD)</span><span style="font-size:24px;font-weight:bold;">HKD $${grandTotalHkd.toFixed(2)}</span></div>`
-            }
+        let html = `<div class="summary-box"><h3 style="margin-top:0;color:white;">📊 總結表 - ${title}</h3>
+            ${type === 'pre' ? `<div class="summary-row"><span>總額</span><span style="font-size:20px;font-weight:bold;">HKD $${totalPreHkd.toFixed(2)}</span></div>`
+            : type === 'local' ? `<div class="summary-row"><span>總額</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalLocalOriginal.toFixed(2)}</span></div>${exchangeRate?`<div class="summary-row"><span>換算 HKD</span><span>HKD $${totalLocalHkd.toFixed(2)}</span></div>`:''}`
+            : `<div class="summary-row"><span>💻 事前</span><span>HKD $${totalPreHkd.toFixed(2)}</span></div><div class="summary-row"><span>📍 當地</span><span>${currency} $${totalLocalOriginal.toFixed(2)} (≈HKD $${totalLocalHkd.toFixed(2)})</span></div><div class="summary-row" style="border-top:1px solid rgba(255,255,255,0.3);margin-top:8px;padding-top:8px;"><span>🌍 總計 (HKD)</span><span style="font-size:24px;font-weight:bold;">HKD $${grandTotalHkd.toFixed(2)}</span></div>`}
         </div>`;
 
-        // 類別分析
         html += `<h3 style="font-size:15px;">📈 類別分析</h3>`;
         const colors = { '餐飲':'#FF9800','交通':'#03A9F4','景點':'#9C27B0','購物':'#F44336','便利店':'#795548','其他':'#9E9E9E','機票':'#0D47A1','酒店':'#004D40','網上Booking':'#4A148C','事前其他':'#F57F17' };
+        const catToUse = (type === 'local') ? catTotalLocal : catTotalHkd;
+        const sumToUse = Object.values(catToUse).reduce((a,b)=>a+b,0);
+        Object.entries(catToUse).sort((a,b)=>b[1]-a[1]).forEach(([cat, amt]) => {
+            const pct = (amt / sumToUse * 100).toFixed(1);
+            const color = colors[cat.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')] || '#999';
+            let amtStr = (type === 'local') ? `${currency} $${amt.toFixed(2)}` : `HKD $${amt.toFixed(2)}`;
+            html += `<div class="category-stat"><span style="min-width:60px;">${cat}</span><div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${color};"></div></div><span style="min-width:100px; text-align:right;">${amtStr} (${pct}%)</span></div>`;
+        });
 
-        if (type === 'local') {
-            // 當地消費類別 (顯示原幣)
-            const sumLocal = Object.values(catTotalLocal).reduce((a,b)=>a+b,0);
-            Object.entries(catTotalLocal).sort((a,b)=>b[1]-a[1]).forEach(([cat, amt]) => {
-                const pct = (amt / sumLocal * 100).toFixed(1);
-                const color = colors[cat.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')] || '#999';
-                html += `<div class="category-stat"><span style="min-width:60px;">${cat}</span><div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${color};"></div></div><span style="min-width:100px; text-align:right;">${currency} $${amt.toFixed(2)} (${pct}%)</span></div>`;
-            });
-        } else {
-            // 事前 或 Total 類別 (顯示港幣)
-            const sumHkd = Object.values(catTotalHkd).reduce((a,b)=>a+b,0);
-            Object.entries(catTotalHkd).sort((a,b)=>b[1]-a[1]).forEach(([cat, amt]) => {
-                const pct = (amt / sumHkd * 100).toFixed(1);
-                const color = colors[cat.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '')] || '#999';
-                html += `<div class="category-stat"><span style="min-width:60px;">${cat}</span><div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${color};"></div></div><span style="min-width:100px; text-align:right;">HKD $${amt.toFixed(2)} (${pct}%)</span></div>`;
-            });
-        }
-
-        // 個人結餘 (根據唔同模式顯示)
         html += `<h3 style="font-size:15px;">👤 結餘</h3><div class="table-wrapper"><table><tr><th>團友</th><th>結餘</th></tr>`;
-        members.forEach(m => { 
-            const bal = balance[m]; 
-            let display = '';
-            if (type === 'pre') {
-                let hkdBal = exchangeRate ? bal * exchangeRate : bal;
-                display = `HKD $${Math.abs(hkdBal).toFixed(2)}`;
-            } else if (type === 'local') {
-                display = `${currency} $${Math.abs(bal).toFixed(2)}`;
-            } else {
-                let hkdBal = exchangeRate ? bal * exchangeRate : bal;
-                display = `HKD $${Math.abs(hkdBal).toFixed(2)} (≈ ${currency} $${Math.abs(bal).toFixed(2)})`;
-            }
-            const status = bal > 0 ? '收' : bal < 0 ? '俾' : '-';
-            html += `<tr><td>${m}</td><td class="${bal>=0?'balance-positive':'balance-negative'}">${status} ${display}</td></tr>`; 
+        members.forEach(m=>{ const bal=balance[m]; 
+            let display = type === 'pre' ? `HKD $${Math.abs(bal * (exchangeRate||1)).toFixed(2)}` : type === 'local' ? `${currency} $${Math.abs(bal).toFixed(2)}` : `HKD $${Math.abs(bal * (exchangeRate||1)).toFixed(2)} (≈ ${currency} $${Math.abs(bal).toFixed(2)})`;
+            html += `<tr><td>${m}</td><td class="${bal>=0?'balance-positive':'balance-negative'}">${bal>0?'收':bal<0?'俾':'-'} ${display}</td></tr>`; 
         });
         html += `</table></div>`;
 
-        // 還款方案
         html += `<h3 style="font-size:15px;">💸 還款方案</h3><div class="table-wrapper"><table>`;
-        if (!transactions.length) {
-            html += '<tr><td>✅ 無數找</td></tr>';
-        } else {
-            transactions.forEach(t => { 
-                let display = '';
-                if (type === 'pre') {
-                    let hkdAmt = exchangeRate ? t.amount * exchangeRate : t.amount;
-                    display = `HKD $${hkdAmt.toFixed(2)}`;
-                } else if (type === 'local') {
-                    display = `${currency} $${t.amount.toFixed(2)}`;
-                } else {
-                    let hkdAmt = exchangeRate ? t.amount * exchangeRate : t.amount;
-                    display = `HKD $${hkdAmt.toFixed(2)} (≈ ${currency} $${t.amount.toFixed(2)})`;
-                }
-                html += `<tr><td>${t.from} 俾 ${t.to}</td><td style="text-align:right; font-weight:600;">${display}</td></tr>`; 
-            });
-        }
+        if (!transactions.length) html += '<tr><td>✅ 無數找</td></tr>';
+        else transactions.forEach(t=>{ 
+            let display = type === 'pre' ? `HKD $${(t.amount * (exchangeRate||1)).toFixed(2)}` : type === 'local' ? `${currency} $${t.amount.toFixed(2)}` : `HKD $${(t.amount * (exchangeRate||1)).toFixed(2)} (≈ ${currency} $${t.amount.toFixed(2)})`;
+            html += `<tr><td>${t.from} 俾 ${t.to}</td><td style="text-align:right; font-weight:600;">${display}</td></tr>`; 
+        });
         html += `</table></div>`;
         
         document.getElementById('resultArea').innerHTML = html; 
         document.getElementById('resultArea').scrollIntoView({behavior:'smooth'});
+    }    function exportToExcel() { 
+        if (!expenses.length) { alert('未有資料'); return; } 
+        if (typeof XLSX === 'undefined') { alert('Excel 組件載入中'); return; } 
+        document.getElementById('exchangeRateModal').dataset.mode = 'excel';
+        document.getElementById('exchangeRateInput').value = lastExchangeRate || '';
+        document.getElementById('exchangeRateModal').style.display = 'flex';
     }
+
+    function _exportToExcel(exchangeRate) {
+        const currency = getSelectedCurrency(); 
+        const wb = XLSX.utils.book_new();
+        const hdr = ['日期','階段','類別','描述','付款人','金額','幣種','港幣結算','付款方式','參與者'];
+        const data = [hdr];
+        
+        expenses.sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(e => {
+            data.push([e.date, e.stage, e.category, e.desc, e.payer, e.amount, e.currency, e.currency === 'HKD' ? e.amount : (e.amount * exchangeRate).toFixed(2), e.paymentMethod || '現金', e.sharedWith.join(', ')]);
+        });
+        
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "消費明細");
+        XLSX.writeFile(wb, `旅行分賬_${currentTripId}_${today}.xlsx`);
+    }
+
+    function exportBackup() { 
+        const data = { tripId: currentTripId, members, expenses, currency: getSelectedCurrency(), customCategories }; 
+        const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'}); 
+        const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`旅行分賬備份_${currentTripId}_${today}.json`; a.click(); URL.revokeObjectURL(a.href); 
+    }
+    
+    async function importBackup(event) { 
+        const file=event.target.files[0]; if(!file)return; 
+        const reader=new FileReader(); 
+        reader.onload=async(e)=>{ 
+            try{ 
+                const data=JSON.parse(e.target.result); 
+                if(data.members){ members=data.members; } 
+                if(data.currency) setSelectedCurrency(data.currency); 
+                if(data.customCategories) customCategories = data.customCategories; 
+                await saveSettings(); 
+                if(data.expenses){ 
+                    for(const exp of data.expenses){ 
+                        await saveExpenseToFirestore({...exp, id: exp.id||Date.now()+'-'+Math.random().toString(36)}); 
+                    } 
+                } 
+                cancelEdit(); renderUI(); alert('✅ 備份匯入成功！'); 
+            } catch(err){ alert('❌ 檔案格式錯誤'); } 
+        }; 
+        reader.readAsText(file); event.target.value=''; 
+    }
+
+    async function resetExpenses() { 
+        if (confirm('確定重設？')) { 
+            if(db){ 
+                const b=window.firebaseHelpers.writeBatch(db); 
+                const s=await window.firebaseHelpers.getDocs(window.firebaseHelpers.collection(db,'trips',currentTripId,'expenses')); 
+                s.forEach(d=>b.delete(d.ref)); 
+                await b.commit(); 
+            } 
+            expenses=[]; renderExpenseList(); document.getElementById('resultArea').innerHTML=''; 
+        } 
+    }
+    
+    async function clearAllData() { 
+        if(confirm('清空？')) { await resetExpenses(); } 
+    }
+
+    // ========== 初始化 ==========
+    renderUI(); toggleOtherPaymentInput();
+</script>
+</body>
+</html>
