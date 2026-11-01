@@ -691,39 +691,115 @@
         container.innerHTML = html;
     }
 
-    function generateFullReport() { if (!expenses.length) { alert('無記錄'); return; } document.getElementById('reportRangeModal').style.display = 'flex'; }
+        function generateFullReport() { 
+        if (!expenses.length) { alert('無記錄'); return; } 
+        document.getElementById('exchangeRateModal').dataset.mode = 'report';
+        document.getElementById('reportRangeModal').style.display = 'flex'; 
+    }
+
     function selectReportRange(type) { 
         document.getElementById('reportRangeModal').style.display = 'none'; 
-        if (type === 'pre') { _generateFullReport('pre', null); } 
-        else { pendingReportType = type; showExchangeModal(); } 
+        pendingReportType = type;
+        
+        if (type === 'pre') { 
+            const hasForeign = expenses.some(e => e.stage === '事前預訂' && e.currency !== 'HKD');
+            if (hasForeign) { showExchangeModal(); } 
+            else { _generateFullReport('pre', null); } 
+        } else { 
+            showExchangeModal(); 
+        } 
     }
+
     function showExchangeModal() {
-        const base = getSelectedCurrency(); document.getElementById('baseCurrencyLabel').innerText = base;
-        document.getElementById('exchangeRateInput').value=lastExchangeRate||''; document.getElementById('exchangeRateModal').style.display='flex';
-        if (lastExchangeRate) { document.getElementById('lastRateHint').style.display='block'; document.getElementById('lastRateHint').innerText=`💡 上次: ${lastExchangeRate}`; } else { document.getElementById('lastRateHint').style.display='none'; }
+        const base = getSelectedCurrency(); 
+        document.getElementById('baseCurrencyLabel').innerText = base;
+        document.getElementById('exchangeRateInput').value = lastExchangeRate || ''; 
+        document.getElementById('exchangeRateModal').style.display = 'flex';
+        if (lastExchangeRate) { 
+            document.getElementById('lastRateHint').style.display = 'block'; 
+            document.getElementById('lastRateHint').innerText = `💡 上次使用匯率: ${lastExchangeRate}`; 
+        } else { 
+            document.getElementById('lastRateHint').style.display = 'none'; 
+        }
     }
+
     async function applyExchangeRate() {
-        const rate = parseFloat(document.getElementById('exchangeRateInput').value); if (!rate) { alert('請輸入匯率'); return; }
-        if (db) { const h = window.firebaseHelpers; await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), { lastExchangeRate: rate }, { merge: true }); lastExchangeRate = rate; }
-        document.getElementById('exchangeRateModal').style.display='none'; _generateFullReport(pendingReportType, rate);
+        const rate = parseFloat(document.getElementById('exchangeRateInput').value); 
+        if (isNaN(rate) || rate <= 0) { alert('請輸入有效匯率'); return; }
+        
+        if (db) { 
+            const h = window.firebaseHelpers; 
+            await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), { lastExchangeRate: rate }, { merge: true }); 
+            lastExchangeRate = rate; 
+        }
+        
+        const mode = document.getElementById('exchangeRateModal').dataset.mode;
+        document.getElementById('exchangeRateModal').style.display = 'none'; 
+        
+        if (mode === 'excel') { 
+            _exportToExcel(rate); 
+        } else { 
+            _generateFullReport(pendingReportType, rate); 
+        }
     }
 
     function _generateFullReport(type, exchangeRate) {
         const currency = getSelectedCurrency(); const balance = {}; members.forEach(m=>balance[m]=0);
-        let totalPre=0, totalLocal=0, totalHkdPre=0;
+        let totalPre=0, totalLocal=0;
+        
         expenses.forEach(e => { 
-            balance[e.payer] += e.amount; e.sharedWith.forEach(p=>balance[p]-=e.splitDetails[p]); 
-            if(e.stage==='事前預訂') { totalPre+=e.amount; if(e.currency==='HKD') totalHkdPre += e.amount; else if(exchangeRate) totalHkdPre += (e.amount * exchangeRate); } 
-            else totalLocal+=e.amount; 
+            balance[e.payer] += e.amount; 
+            e.sharedWith.forEach(p=>balance[p]-=e.splitDetails[p]); 
         });
-        let grand = totalHkdPre + (totalLocal * (exchangeRate||0));
         
-        const creditors=[], debtors=[]; members.forEach(m=>{ const b=balance[m]; if (Math.abs(b)<0.001) balance[m]=0; else if (b>0) creditors.push({name:m,amount:b}); else if (b<0) debtors.push({name:m,amount:-b}); }); creditors.sort((a,b)=>b.amount-a.amount); debtors.sort((a,b)=>b.amount-a.amount);
-        const transactions=[]; let i=0,j=0; while(i<debtors.length&&j<creditors.length){ const d=debtors[i],c=creditors[j]; const amt=Math.min(d.amount,c.amount); transactions.push({from:d.name,to:c.name,amount:amt}); d.amount-=amt; c.amount-=amt; if(d.amount<0.001)i++; if(c.amount<0.001)j++; }
+        expenses.forEach(e => { 
+            if (type === 'pre' && e.stage !== '事前預訂') return;
+            if (type === 'local' && e.stage === '事前預訂') return;
+            
+            if(e.stage === '事前預訂') {
+                if (e.currency === 'HKD') totalPre += e.amount;
+                else totalPre += (e.amount * (exchangeRate || 0));
+            } else {
+                totalLocal += e.amount; 
+            }
+        });
         
-        let html = `<div class="summary-box"><h3 style="margin-top:0;color:white;">📊 總結表</h3>${type==='total'?`<div class="summary-row"><span>💻 事前</span><span>${currency} $${totalPre.toFixed(2)}</span></div><div class="summary-row"><span>📍 當地</span><span>${currency} $${totalLocal.toFixed(2)}</span></div><div class="summary-row" style="border-top:1px solid rgba(255,255,255,0.3);margin-top:4px;padding-top:8px;"><span>🌍 總計 (HKD)</span><span style="font-size:20px;font-weight:bold;">HKD $${grand.toFixed(2)}</span></div>`:type==='pre'?`<div class="summary-row"><span>💻 事前</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalPre.toFixed(2)}</span></div>`:`<div class="summary-row"><span>📍 當地</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalLocal.toFixed(2)}</span></div>`}</div>`;
+        let grandLocalHkd = totalLocal * (exchangeRate || 0);
+        let grandTotalHkd = totalPre + grandLocalHkd;
+
+        const creditors=[], debtors=[]; 
+        members.forEach(m=>{ 
+            const b=balance[m]; 
+            if (Math.abs(b)<0.001) balance[m]=0; 
+            else if (b>0) creditors.push({name:m,amount:b}); 
+            else if (b<0) debtors.push({name:m,amount:-b}); 
+        }); 
+        creditors.sort((a,b)=>b.amount-a.amount); 
+        debtors.sort((a,b)=>b.amount-a.amount);
         
-        // 類別分析 (還原進度條)
+        const transactions=[]; let i=0,j=0; 
+        while(i<debtors.length&&j<creditors.length){ 
+            const d=debtors[i],c=creditors[j]; 
+            const amt=Math.min(d.amount,c.amount); 
+            transactions.push({from:d.name,to:c.name,amount:amt}); 
+            d.amount-=amt; c.amount-=amt; 
+            if(d.amount<0.001)i++; 
+            if(c.amount<0.001)j++; 
+        }
+
+        let html = `<div class="summary-box">
+            <h3 style="margin-top:0;color:white;">📊 總結表</h3>
+            ${type === 'pre' 
+                ? `<div class="summary-row"><span>💻 事前預訂 (HKD)</span><span style="font-size:20px;font-weight:bold;">HKD $${totalPre.toFixed(2)}</span></div>`
+                : type === 'local' 
+                ? `<div class="summary-row"><span>📍 當地消費 (原幣)</span><span style="font-size:20px;font-weight:bold;">${currency} $${totalLocal.toFixed(2)}</span></div>
+                   ${exchangeRate ? `<div class="summary-row"><span>📍 當地消費 (HKD)</span><span>HKD $${grandLocalHkd.toFixed(2)}</span></div>` : ''}`
+                : `<div class="summary-row"><span>💻 事前預訂</span><span>HKD $${totalPre.toFixed(2)}</span></div>
+                   <div class="summary-row"><span>📍 當地消費</span><span>${currency} $${totalLocal.toFixed(2)} (≈HKD $${grandLocalHkd.toFixed(2)})</span></div>
+                   <div class="summary-row" style="border-top:1px solid rgba(255,255,255,0.3);margin-top:8px;padding-top:8px;"><span>🌍 總計 (HKD)</span><span style="font-size:24px;font-weight:bold;">HKD $${grandTotalHkd.toFixed(2)}</span></div>`
+            }
+        </div>`;
+
         html += `<h3 style="font-size:15px;">📈 類別分析</h3>`;
         const catTotal = {};
         expenses.forEach(e => {
@@ -741,50 +817,87 @@
         });
 
         html += `<h3 style="font-size:15px;">👤 結餘</h3><div class="table-wrapper"><table><tr><th>團友</th><th>結餘</th></tr>`;
-        members.forEach(m=>{ const bal=balance[m]; html += `<tr><td>${m}</td><td class="${bal>=0?'balance-positive':'balance-negative'}">${bal>0?'收':bal<0?'俾':'-'} ${Math.abs(bal).toFixed(2)}</td></tr>`; });
+        members.forEach(m=>{ 
+            const bal = balance[m]; 
+            html += `<tr><td>${m}</td><td class="${bal>=0?'balance-positive':'balance-negative'}">${bal>0?'收':bal<0?'俾':'-'} ${currency} ${Math.abs(bal).toFixed(2)}</td></tr>`; 
+        });
         html += `</table></div><h3 style="font-size:15px;">💸 還款</h3><div class="table-wrapper"><table>`;
         if (!transactions.length) html += '<tr><td>✅ 無數找</td></tr>';
-        else transactions.forEach(t=>{ html += `<tr><td>${t.from} 俾 ${t.to}</td><td>${currency} $${t.amount.toFixed(2)}</td></tr>`; });
+        else transactions.forEach(t=>{ 
+            html += `<tr><td>${t.from} 俾 ${t.to}</td><td>${currency} $${t.amount.toFixed(2)}</td></tr>`; 
+        });
         html += `</table></div>`;
-        document.getElementById('resultArea').innerHTML = html; document.getElementById('resultArea').scrollIntoView({behavior:'smooth'});
+        
+        document.getElementById('resultArea').innerHTML = html; 
+        document.getElementById('resultArea').scrollIntoView({behavior:'smooth'});
     }
 
     // ========== Excel 匯出 ==========
     function exportToExcel() { 
         if (!expenses.length) { alert('未有資料'); return; } 
         if (typeof XLSX === 'undefined') { alert('Excel 組件載入中'); return; } 
+        
+        document.getElementById('exchangeRateModal').dataset.mode = 'excel';
         document.getElementById('exchangeRateInput').value = lastExchangeRate || '';
         document.getElementById('exchangeRateModal').style.display = 'flex';
-        document.getElementById('exchangeRateModal').dataset.mode = 'excel';
-    }
-
-    async function applyExchangeRate() {
-        const rate = parseFloat(document.getElementById('exchangeRateInput').value); 
-        if (isNaN(rate)) { alert('請輸入有效匯率'); return; }
-        if (db) { const h = window.firebaseHelpers; await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'), { lastExchangeRate: rate }, { merge: true }); lastExchangeRate = rate; }
-        const mode = document.getElementById('exchangeRateModal').dataset.mode;
-        document.getElementById('exchangeRateModal').style.display='none'; 
-        
-        if (mode === 'excel') { _exportToExcel(rate); } 
-        else { _generateFullReport(pendingReportType, rate); }
     }
 
     function _exportToExcel(exchangeRate) {
-        const currency = getSelectedCurrency(); const wb = XLSX.utils.book_new();
+        const currency = getSelectedCurrency(); 
+        const wb = XLSX.utils.book_new();
         const hdr = ['日期','階段','類別','描述','付款人','金額','幣種','港幣結算','付款方式','參與者'];
         const data = [hdr];
+        
         expenses.sort((a,b)=>new Date(a.date)-new Date(b.date)).forEach(e => {
             data.push([e.date, e.stage, e.category, e.desc, e.payer, e.amount, e.currency, e.currency === 'HKD' ? e.amount : (e.amount * exchangeRate).toFixed(2), e.paymentMethod || '現金', e.sharedWith.join(', ')]);
         });
+        
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "消費明細");
         XLSX.writeFile(wb, `旅行分賬_${currentTripId}_${today}.xlsx`);
     }
 
-    function exportBackup() { const data = { tripId: currentTripId, members, expenses, currency: getSelectedCurrency(), customCategories }; const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`旅行分賬備份_${currentTripId}_${today}.json`; a.click(); URL.revokeObjectURL(a.href); }
-    async function importBackup(event) { const file=event.target.files[0]; if(!file)return; const reader=new FileReader(); reader.onload=async(e)=>{ try{ const data=JSON.parse(e.target.result); if(data.members){ members=data.members; } if(data.currency) setSelectedCurrency(data.currency); if(data.customCategories) customCategories = data.customCategories; await saveSettings(); if(data.expenses){ for(const exp of data.expenses){ await saveExpenseToFirestore({...exp, id: exp.id||Date.now()+'-'+Math.random().toString(36)}); } } cancelEdit(); renderUI(); alert('✅ 備份匯入成功！'); } catch(err){ alert('❌ 檔案格式錯誤'); } }; reader.readAsText(file); event.target.value=''; }
+    function exportBackup() { 
+        const data = { tripId: currentTripId, members, expenses, currency: getSelectedCurrency(), customCategories }; 
+        const blob = new Blob([JSON.stringify(data,null,2)], {type:'application/json'}); 
+        const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=`旅行分賬備份_${currentTripId}_${today}.json`; a.click(); URL.revokeObjectURL(a.href); 
+    }
+    
+    async function importBackup(event) { 
+        const file=event.target.files[0]; if(!file)return; 
+        const reader=new FileReader(); 
+        reader.onload=async(e)=>{ 
+            try{ 
+                const data=JSON.parse(e.target.result); 
+                if(data.members){ members=data.members; } 
+                if(data.currency) setSelectedCurrency(data.currency); 
+                if(data.customCategories) customCategories = data.customCategories; 
+                await saveSettings(); 
+                if(data.expenses){ 
+                    for(const exp of data.expenses){ 
+                        await saveExpenseToFirestore({...exp, id: exp.id||Date.now()+'-'+Math.random().toString(36)}); 
+                    } 
+                } 
+                cancelEdit(); renderUI(); alert('✅ 備份匯入成功！'); 
+            } catch(err){ alert('❌ 檔案格式錯誤'); } 
+        }; 
+        reader.readAsText(file); event.target.value=''; 
+    }
 
-    async function resetExpenses() { if (confirm('確定重設？')) { if(db){ const b=window.firebaseHelpers.writeBatch(db); const s=await window.firebaseHelpers.getDocs(window.firebaseHelpers.collection(db,'trips',currentTripId,'expenses')); s.forEach(d=>b.delete(d.ref)); await b.commit(); } expenses=[]; renderExpenseList(); document.getElementById('resultArea').innerHTML=''; } }
-    async function clearAllData() { if(confirm('清空？')) { await resetExpenses(); } }
+    async function resetExpenses() { 
+        if (confirm('確定重設？')) { 
+            if(db){ 
+                const b=window.firebaseHelpers.writeBatch(db); 
+                const s=await window.firebaseHelpers.getDocs(window.firebaseHelpers.collection(db,'trips',currentTripId,'expenses')); 
+                s.forEach(d=>b.delete(d.ref)); 
+                await b.commit(); 
+            } 
+            expenses=[]; renderExpenseList(); document.getElementById('resultArea').innerHTML=''; 
+        } 
+    }
+    
+    async function clearAllData() { 
+        if(confirm('清空？')) { await resetExpenses(); } 
+    }
 
     // ========== 初始化 ==========
     renderUI(); toggleOtherPaymentInput();
