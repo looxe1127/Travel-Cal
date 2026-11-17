@@ -80,7 +80,24 @@
         .filter-bar select, .filter-bar input { flex: 1; min-width: 100%; }
         @media (min-width: 500px) { .filter-bar select, .filter-bar input { min-width: 100px; } }
 
-        .day-summary { background: #f9f9f9; border-radius: 10px; padding: 10px; margin: 10px 0; display: flex; justify-content: space-between; align-items: center; font-size: 14px; }
+        /* === 階段區塊 + 日期收合 === */
+        .stage-section { margin-bottom: 16px; }
+        .stage-section-header { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; padding: 10px 14px; background: #f0f4ff; border-radius: 10px; margin: 10px 0; font-size: 15px; font-weight: 700; }
+        .stage-section-header.pre { background: #fff3e0; color: #e65100; }
+        .stage-section-header.local { background: #e3f2fd; color: #1976d2; }
+        .stage-section-header .arrow { font-size: 12px; transition: transform 0.2s; color: #999; }
+        .stage-section-header.expanded .arrow { transform: rotate(90deg); }
+        .stage-section-content { display: none; }
+        .stage-section-content.show { display: block; }
+
+        .day-header { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; padding: 8px 14px; background: #f9f9f9; border-radius: 10px; margin: 8px 0; font-size: 14px; }
+        .day-header:hover { background: #f0f0f0; }
+        .day-header .arrow { font-size: 12px; color: #999; transition: transform 0.2s; }
+        .day-header.expanded .arrow { transform: rotate(90deg); }
+        .day-header .day-total { margin-left: auto; font-weight: 600; color: #666; }
+        .day-content { display: none; padding: 0 4px; }
+        .day-content.show { display: block; }
+
         .form-grid { display: flex; flex-direction: column; gap: 6px; }
         @media (min-width: 500px) { .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; } }
 
@@ -122,9 +139,17 @@
         .settings-btn { background: #f0f0f0; color: #333; border-radius: 12px; padding: 10px; font-size: 14px; width: 100%; min-height: 40px; font-weight: 600; margin-bottom: 12px; }
 
         .pre-trip-highlight { background: #e3f2fd; padding: 10px; border-radius: 12px; margin-top: 6px; border: 1px solid #90caf9; }
+        .actual-hkd-highlight { background: #e8f5e9; padding: 10px; border-radius: 12px; margin-top: 6px; border: 1px solid #a5d6a7; }
 
         .settled-row { opacity: 0.5; text-decoration: line-through; }
         .settle-btn { background: #e8f5e9; color: #2e7d32; border-radius: 20px; padding: 4px 10px; font-size: 11px; width: auto; min-height: 28px; }
+        .close-report-btn { background: rgba(255,255,255,0.2); color: white; border: 1px solid rgba(255,255,255,0.4); border-radius: 20px; padding: 4px 14px; font-size: 13px; width: auto; min-height: 32px; cursor: pointer; float: right; }
+
+        .rate-mode-tabs { display: flex; gap: 8px; margin: 8px 0; }
+        .rate-mode-tabs button { flex: 1; background: #f0f0f0; color: #1a1a1a; min-height: 40px; font-size: 14px; }
+        .rate-mode-tabs button.active { background: #0066cc; color: white; }
+
+        .estimated-tag { font-size: 11px; color: #ff9800; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -174,13 +199,23 @@
             <div><label>💵 金額</label><input type="number" id="amountInput" placeholder="0.00" step="0.01" min="0" onchange="updateSplitPreview()" onkeyup="updateSplitPreview()"></div>
         </div>
 
+        <!-- 事前預訂貨幣選擇 -->
         <div class="form-grid" id="preTripCurrencyGrid" style="display: none; margin-top: 6px;">
             <div class="pre-trip-highlight" style="grid-column: span 2;">
                 <label style="font-weight: 600; color: #0d47a1;">💵 呢筆錢用咩貨幣入？</label>
-                <select id="preTripCurrencyType" style="border-color: #90caf9;">
+                <select id="preTripCurrencyType" style="border-color: #90caf9;" onchange="toggleActualHkdInput()">
                     <option value="local">當地貨幣 (總結時計匯率)</option>
                     <option value="hkd">港幣 HKD</option>
                 </select>
+            </div>
+        </div>
+
+        <!-- 事前當地貨幣：實際港紙欄位 -->
+        <div id="actualHkdGrid" style="display: none; margin-top: 6px;">
+            <div class="actual-hkd-highlight">
+                <label style="font-weight: 600; color: #2e7d32;">💳 實際港紙 (選填)</label>
+                <input type="number" id="actualHkdInput" placeholder="信用卡出咗數先入，留空 = 總結時計匯率" step="0.01" min="0">
+                <div style="font-size:12px; color: #666; margin-top:4px;">💡 有信用卡帳單就入返實際 HKD，唔使計匯率。留空嘅話總結時用匯率預估。</div>
             </div>
         </div>
 
@@ -288,9 +323,14 @@
 <div class="modal-overlay" id="exchangeRateModal">
     <div class="modal">
         <h3>💱 輸入匯率</h3>
-        <p style="font-size:13px;color:#666;">1 <span id="baseCurrencyLabel">HKD</span> = ? HKD</p>
+        <div class="rate-mode-tabs">
+            <button id="rateModeA" class="active" onclick="setRateMode('A')">1 港紙 = ? 當地</button>
+            <button id="rateModeB" onclick="setRateMode('B')">1 當地 = ? 港紙</button>
+        </div>
+        <p id="rateLabel" style="font-size:13px;color:#666;">1 HKD = ? <span id="baseCurrencyLabel">HKD</span></p>
         <p id="lastRateHint" style="font-size:12px; color:#1976d2; font-weight:bold; display:none;"></p>
-        <input type="number" id="exchangeRateInput" placeholder="例如: 0.052" step="any">
+        <input type="number" id="exchangeRateInput" placeholder="例如: 4" step="any">
+        <p id="ratePlaceholderHint" style="font-size:12px;color:#999;"></p>
         <div class="modal-actions">
             <button onclick="applyExchangeRate()" class="small">✅ 確定</button>
             <button onclick="document.getElementById('exchangeRateModal').style.display='none'" class="small secondary">取消</button>
@@ -347,7 +387,26 @@
     let customCategories = [];
     let lastExchangeRate = null;
     let pendingReportType = 'total';
-    let pendingExpenseSplitData = null; // 編輯時暫存分賬資料
+    let pendingExpenseSplitData = null;
+    let reportIsOpen = false;
+    let currentRateMode = 'B'; // B = 1 當地 = ? HKD (直接乘)
+
+    // 匯率 placeholder 參考值 (1 當地 = ? HKD)
+    const RATE_PLACEHOLDERS = {
+        'HKD': '',
+        'TWD': '0.238',
+        'JPY': '0.05',
+        'KRW': '0.0056',
+        'THB': '0.232'
+    };
+    // 匯率 placeholder 參考值 (1 HKD = ? 當地)
+    const RATE_PLACEHOLDERS_A = {
+        'HKD': '',
+        'TWD': '4.20',
+        'JPY': '20.0',
+        'KRW': '178',
+        'THB': '4.31'
+    };
 
     let currentPage = localStorage.getItem('lastPage') || 'home';
     const savedTripId = localStorage.getItem('lastTripId');
@@ -394,7 +453,6 @@
             return;
         }
 
-        // 排序
         const sortBy = sortSelect ? sortSelect.value : 'tripDate';
         list.sort((a, b) => {
             if (sortBy === 'lastUpdated') {
@@ -632,7 +690,6 @@
             }
         }
 
-        // 更新本地 cache
         if (!homeDataCache[code]) homeDataCache[code] = {};
         homeDataCache[code].customName = name;
         homeDataCache[code].members = newMembers;
@@ -721,7 +778,8 @@
             snap.forEach(d => expenses.push({ ...d.data(), id: d.id }));
             updateFilterDate();
             renderExpenseList();
-            if (document.getElementById('resultArea').innerHTML) {
+            // 靜默更新總結表，唔 scroll
+            if (reportIsOpen) {
                 _generateFullReport(pendingReportType, lastExchangeRate);
             }
             updateTripInfo();
@@ -746,7 +804,7 @@
 
         unsubscribeSettled = h.onSnapshot(h.doc(db, 'trips', currentTripId, 'settings', 'settled'), (snap) => {
             settledTransactions = snap.exists() ? snap.data().transactions || {} : {};
-            if (document.getElementById('resultArea').innerHTML) {
+            if (reportIsOpen) {
                 _generateFullReport(pendingReportType, lastExchangeRate);
             }
         });
@@ -783,7 +841,6 @@
         const id = ed.id || Date.now() + '-' + Math.random().toString(36);
         try {
             await h.setDoc(h.doc(db, 'trips', currentTripId, 'expenses', id), { ...ed, id });
-            // 新增/編輯消費後清空已結算記錄
             await h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'settled'), { transactions: {} });
             updateTripInfo();
         } catch (e) {
@@ -935,6 +992,7 @@
             document.getElementById('stageLocalBtn').classList.add('active');
             document.getElementById('stagePreBtn').classList.remove('active');
             document.getElementById('preTripCurrencyGrid').style.display = 'none';
+            document.getElementById('actualHkdGrid').style.display = 'none';
             const localCustom = customCategories.filter(c => c.type === 'local').map(c => c.name);
             document.getElementById('categorySelect').innerHTML =
                 LOCAL_CATS.concat(localCustom).map(c => `<option value="${c}">${c}</option>`).join('');
@@ -942,10 +1000,21 @@
             document.getElementById('stagePreBtn').classList.add('active');
             document.getElementById('stageLocalBtn').classList.remove('active');
             document.getElementById('preTripCurrencyGrid').style.display = 'block';
+            toggleActualHkdInput();
             const preCustom = customCategories.filter(c => c.type === 'pre').map(c => c.name);
             document.getElementById('categorySelect').innerHTML =
                 PRE_CATS.concat(preCustom).map(c => `<option value="${c}">${c}</option>`).join('');
         }
+    }
+
+    // 事前當地貨幣先顯示「實際港紙」欄位
+    function toggleActualHkdInput() {
+        if (currentExpenseStage !== '事前預訂') {
+            document.getElementById('actualHkdGrid').style.display = 'none';
+            return;
+        }
+        const type = document.getElementById('preTripCurrencyType').value;
+        document.getElementById('actualHkdGrid').style.display = (type === 'local') ? 'block' : 'none';
     }
 
     function renderSplitArea() {
@@ -968,7 +1037,6 @@
                 html += `<div class="member-tag ${isSelected ? 'selected' : ''}" data-member="${escapeHtml(m)}" onclick="toggleMemberTag(this)">${escapeHtml(m)}</div>`;
             });
             html += '</div>';
-
             if (amount > 0) {
                 const cnt = document.querySelectorAll('.member-tag.selected').length;
                 if (cnt > 0) {
@@ -1045,9 +1113,19 @@
         if (isNaN(amount) || amount <= 0) { alert('請輸入有效金額'); return; }
 
         let finalCurrency = getSelectedCurrency();
+        let actualHkd = null;
+
         if (currentExpenseStage === '事前預訂') {
             const type = document.getElementById('preTripCurrencyType').value;
-            if (type === 'hkd') finalCurrency = 'HKD';
+            if (type === 'hkd') {
+                finalCurrency = 'HKD';
+            } else {
+                // 事前當地貨幣：睇有冇入實際港紙
+                const actualVal = parseFloat(document.getElementById('actualHkdInput').value);
+                if (!isNaN(actualVal) && actualVal > 0) {
+                    actualHkd = actualVal;
+                }
+            }
         }
 
         let sharedWith = [], splitDetails = {};
@@ -1077,6 +1155,7 @@
         saveExpenseToFirestore({
             payer, amount, desc, date, category,
             currency: finalCurrency,
+            actualHkd: actualHkd,
             paymentMethod: getPaymentMethod(),
             stage: currentExpenseStage,
             sharedWith, splitDetails,
@@ -1099,7 +1178,15 @@
         document.getElementById('descInput').value = e.desc;
 
         if (e.stage === '事前預訂') {
-            document.getElementById('preTripCurrencyType').value = (e.currency === 'HKD') ? 'hkd' : 'local';
+            const currencyType = (e.currency === 'HKD') ? 'hkd' : 'local';
+            document.getElementById('preTripCurrencyType').value = currencyType;
+            toggleActualHkdInput();
+            // 還原 actualHkd
+            if (e.actualHkd) {
+                document.getElementById('actualHkdInput').value = e.actualHkd;
+            } else {
+                document.getElementById('actualHkdInput').value = '';
+            }
         }
 
         document.getElementById('paymentMethodSelect').value = e.paymentMethod || '現金';
@@ -1111,7 +1198,6 @@
             customAmounts = { ...e.splitDetails };
         }
 
-        // 暫存分賬資料，等 renderSplitArea 用
         pendingExpenseSplitData = {
             sharedWith: e.sharedWith || [],
             splitDetails: e.splitDetails || {}
@@ -1123,10 +1209,8 @@
         document.getElementById('expenseFormCard').classList.add('editing-mode');
 
         setSplitMode(currentSplitMode);
-        // 如果係 equal mode，renderSplitArea 完之後要設定 selected
         if (currentSplitMode === 'equal') {
             renderSplitArea();
-            // 確保 tag selected 狀態正確
             document.querySelectorAll('.member-tag').forEach(tag => {
                 if (e.sharedWith && e.sharedWith.includes(tag.dataset.member)) {
                     tag.classList.add('selected');
@@ -1136,6 +1220,9 @@
             });
             updateSplitPreview();
         }
+
+        // Scroll to form
+        document.getElementById('expenseFormCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
     function cancelEdit() {
@@ -1143,6 +1230,7 @@
         pendingExpenseSplitData = null;
         document.getElementById('amountInput').value = '';
         document.getElementById('descInput').value = '';
+        document.getElementById('actualHkdInput').value = '';
         document.getElementById('expenseDate').value = today;
         document.getElementById('categorySelect').value = LOCAL_CATS[0];
         customAmounts = {};
@@ -1161,6 +1249,25 @@
         deleteExpenseFromFirestore(id);
     }
 
+    // =============================================
+    // 消費記錄列表 (分階段 + 日期收合)
+    // =============================================
+    // 收合狀態記憶
+    let expandedDays = {}; // { 'local-2026-11-15': true, ... }
+    let expandedStages = {}; // { 'local': true, 'pre': false }
+
+    function toggleStageSection(stage) {
+        const key = stage === '事前預訂' ? 'pre' : 'local';
+        expandedStages[key] = !expandedStages[key];
+        renderExpenseList();
+    }
+
+    function toggleDaySection(stageKey, date) {
+        const key = `${stageKey}-${date}`;
+        expandedDays[key] = !expandedDays[key];
+        renderExpenseList();
+    }
+
     function renderExpenseList() {
         const container = document.getElementById('expenseList');
         const fc = document.getElementById('filterCategory').value;
@@ -1177,31 +1284,131 @@
             return;
         }
 
-        filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+        // 分開當地同事前
+        const localExpenses = filtered.filter(e => e.stage !== '事前預訂');
+        const preExpenses = filtered.filter(e => e.stage === '事前預訂');
+
+        // 揾當地最新日期 (用嚟預設展開)
+        let localLatestDate = '';
+        if (localExpenses.length) {
+            localLatestDate = localExpenses.map(e => e.date).sort().reverse()[0];
+        }
 
         let html = `<h3 style="font-size:16px;">📋 記錄 (${filtered.length} 筆)</h3>`;
-        let curDate = '';
-        filtered.forEach(e => {
-            if (e.date !== curDate) {
-                curDate = e.date;
-                const tot = filtered.filter(x => x.date === e.date).reduce((s, x) => s + x.amount, 0);
-                html += `<div class="day-summary"><strong>📅 ${e.date}</strong> <span>${e.currency} $${tot.toFixed(2)}</span></div>`;
-            }
-            html += `<div class="expense-item">
-                <div style="display:flex;justify-content:space-between;">
-                    <div>
-                        <strong>${escapeHtml(e.desc)}</strong>
-                        <span class="category-badge">${escapeHtml(e.category)}</span>
-                    </div>
-                    <div class="expense-actions">
-                        <button class="edit-btn" onclick="editExpense('${e.id}')">✏️</button>
-                        <button class="delete-btn" onclick="deleteExpense('${e.id}')">🗑️</button>
-                    </div>
+
+        // === 當地消費段 ===
+        if (localExpenses.length) {
+            const stageKey = 'local';
+            const isExpanded = expandedStages[stageKey] !== false; // 預設展開
+            html += `<div class="stage-section">
+                <div class="stage-section-header local ${isExpanded ? 'expanded' : ''}" onclick="toggleStageSection('當地消費')">
+                    <span class="arrow">▶</span>
+                    <span>📍 當地消費 (${localExpenses.length} 筆)</span>
                 </div>
-                <div style="margin-top:4px; font-size:13px;">💸 ${escapeHtml(e.payer)} 俾咗 ${e.currency} $${e.amount.toFixed(2)}</div>
-            </div>`;
-        });
+                <div class="stage-section-content ${isExpanded ? 'show' : ''}">`;
+
+            // 按日期分組
+            const localByDate = {};
+            localExpenses.forEach(e => {
+                if (!localByDate[e.date]) localByDate[e.date] = [];
+                localByDate[e.date].push(e);
+            });
+            const localDates = Object.keys(localByDate).sort().reverse();
+
+            localDates.forEach(date => {
+                const dayExpenses = localByDate[date];
+                const dayTotal = dayExpenses.reduce((s, x) => s + x.amount, 0);
+                const dayKey = `${stageKey}-${date}`;
+                // 最新日期預設展開
+                const dayExpanded = expandedDays[dayKey] !== undefined
+                    ? expandedDays[dayKey]
+                    : (date === localLatestDate);
+
+                html += `<div class="day-header ${dayExpanded ? 'expanded' : ''}" onclick="toggleDaySection('${stageKey}','${date}')">
+                    <span class="arrow">▶</span>
+                    <strong>📅 ${date}</strong>
+                    <span class="day-total">${dayExpenses[0].currency} $${dayTotal.toFixed(2)}</span>
+                </div>
+                <div class="day-content ${dayExpanded ? 'show' : ''}">`;
+
+                dayExpenses.forEach(e => {
+                    html += renderExpenseItem(e);
+                });
+
+                html += `</div>`;
+            });
+
+            html += `</div></div>`;
+        }
+
+        // === 事前預訂段 ===
+        if (preExpenses.length) {
+            const stageKey = 'pre';
+            const isExpanded = expandedStages[stageKey] === true; // 預設收合
+            html += `<div class="stage-section">
+                <div class="stage-section-header pre ${isExpanded ? 'expanded' : ''}" onclick="toggleStageSection('事前預訂')">
+                    <span class="arrow">▶</span>
+                    <span>💻 事前預訂 (${preExpenses.length} 筆)</span>
+                </div>
+                <div class="stage-section-content ${isExpanded ? 'show' : ''}">`;
+
+            const preByDate = {};
+            preExpenses.forEach(e => {
+                if (!preByDate[e.date]) preByDate[e.date] = [];
+                preByDate[e.date].push(e);
+            });
+            const preDates = Object.keys(preByDate).sort().reverse();
+
+            preDates.forEach(date => {
+                const dayExpenses = preByDate[date];
+                const dayTotal = dayExpenses.reduce((s, x) => s + x.amount, 0);
+                const dayKey = `${stageKey}-${date}`;
+                const dayExpanded = expandedDays[dayKey] === true; // 預設收合
+
+                html += `<div class="day-header ${dayExpanded ? 'expanded' : ''}" onclick="toggleDaySection('${stageKey}','${date}')">
+                    <span class="arrow">▶</span>
+                    <strong>📅 ${date}</strong>
+                    <span class="day-total">${dayExpenses[0].currency} $${dayTotal.toFixed(2)}</span>
+                </div>
+                <div class="day-content ${dayExpanded ? 'show' : ''}">`;
+
+                dayExpenses.forEach(e => {
+                    html += renderExpenseItem(e);
+                });
+
+                html += `</div>`;
+            });
+
+            html += `</div></div>`;
+        }
+
         container.innerHTML = html;
+    }
+
+    function renderExpenseItem(e) {
+        let extraInfo = '';
+        // 事前當地貨幣：顯示 actualHkd 或預估標記
+        if (e.stage === '事前預訂' && e.currency !== 'HKD') {
+            if (e.actualHkd) {
+                extraInfo = ` <span style="color:#2e7d32; font-size:11px;">(實際 HKD $${e.actualHkd.toFixed(2)})</span>`;
+            } else {
+                extraInfo = ` <span class="estimated-tag">(待計匯率)</span>`;
+            }
+        }
+
+        return `<div class="expense-item">
+            <div style="display:flex;justify-content:space-between;">
+                <div>
+                    <strong>${escapeHtml(e.desc)}</strong>
+                    <span class="category-badge">${escapeHtml(e.category)}</span>
+                </div>
+                <div class="expense-actions">
+                    <button class="edit-btn" onclick="editExpense('${e.id}')">✏️</button>
+                    <button class="delete-btn" onclick="deleteExpense('${e.id}')">🗑️</button>
+                </div>
+            </div>
+            <div style="margin-top:4px; font-size:13px;">💸 ${escapeHtml(e.payer)} 俾咗 ${e.currency} $${e.amount.toFixed(2)}${extraInfo}</div>
+        </div>`;
     }
 
     // =============================================
@@ -1212,61 +1419,151 @@
         document.getElementById('reportRangeModal').style.display = 'flex';
     }
 
+    function closeReport() {
+        reportIsOpen = false;
+        document.getElementById('resultArea').innerHTML = '';
+    }
+
     function selectReportRange(type) {
         pendingReportType = type;
         document.getElementById('reportRangeModal').style.display = 'none';
 
-        // 判斷需唔需要匯率
         const hasLocal = expenses.some(e => e.stage !== '事前預訂');
-        const hasPreLocalCurrency = expenses.some(e => e.stage === '事前預訂' && e.currency !== 'HKD');
+        const hasPreLocalCurrency = expenses.some(e => e.stage === '事前預訂' && e.currency !== 'HKD' && !e.actualHkd);
+
         let needRate = false;
 
-        if (type === 'local' && hasLocal) needRate = true;
-        if (type === 'total' && (hasLocal || hasPreLocalCurrency)) needRate = true;
-        if (type === 'pre' && hasPreLocalCurrency) needRate = true;
+        if (type === 'local') {
+            // 當地報表唔使匯率，直接顯示原幣
+            needRate = false;
+        } else if (type === 'total') {
+            if (hasLocal) needRate = true;
+            if (hasPreLocalCurrency) needRate = true;
+        } else if (type === 'pre') {
+            if (hasPreLocalCurrency) needRate = true;
+        }
 
         if (needRate) {
-            const currency = getSelectedCurrency();
-            document.getElementById('baseCurrencyLabel').textContent = currency;
-            document.getElementById('exchangeRateInput').value = lastExchangeRate || '';
-            const hint = document.getElementById('lastRateHint');
-            if (lastExchangeRate) {
-                hint.textContent = `上次匯率: 1 ${currency} = ${lastExchangeRate} HKD`;
-                hint.style.display = 'block';
-            } else {
-                hint.style.display = 'none';
-            }
-            document.getElementById('exchangeRateModal').dataset.mode = 'report';
-            document.getElementById('exchangeRateModal').style.display = 'flex';
+            openExchangeRateModal('report');
         } else {
             _generateFullReport(type, null);
         }
     }
 
+    function openExchangeRateModal(mode) {
+        const currency = getSelectedCurrency();
+        document.getElementById('baseCurrencyLabel').textContent = currency;
+
+        // 根據貨幣設定 placeholder
+        updateRatePlaceholder();
+
+        // 設定 mode tabs 預設
+        currentRateMode = 'B';
+        setRateMode('B');
+
+        document.getElementById('exchangeRateInput').value = lastExchangeRate || '';
+
+        const hint = document.getElementById('lastRateHint');
+        if (lastExchangeRate) {
+            hint.textContent = `上次匯率: 1 ${currency} = ${lastExchangeRate} HKD`;
+            hint.style.display = 'block';
+        } else {
+            hint.style.display = 'none';
+        }
+
+        document.getElementById('exchangeRateModal').dataset.mode = mode;
+        document.getElementById('exchangeRateModal').style.display = 'flex';
+    }
+
+    function setRateMode(mode) {
+        currentRateMode = mode;
+        document.getElementById('rateModeA').className = mode === 'A' ? 'active' : '';
+        document.getElementById('rateModeB').className = mode === 'B' ? 'active' : '';
+
+        const currency = getSelectedCurrency();
+        const label = document.getElementById('rateLabel');
+        const placeholder = document.getElementById('ratePlaceholderHint');
+
+        if (mode === 'A') {
+            // 1 HKD = ? 當地
+            label.innerHTML = `1 HKD = ? <strong>${currency}</strong>`;
+            const ph = RATE_PLACEHOLDERS_A[currency] || '';
+            placeholder.textContent = ph ? `參考: 1 HKD ≈ ${ph} ${currency}` : '';
+            document.getElementById('exchangeRateInput').placeholder = ph || '例如: 4';
+        } else {
+            // 1 當地 = ? HKD
+            label.innerHTML = `1 <strong>${currency}</strong> = ? HKD`;
+            const ph = RATE_PLACEHOLDERS[currency] || '';
+            placeholder.textContent = ph ? `參考: 1 ${currency} ≈ ${ph} HKD` : '';
+            document.getElementById('exchangeRateInput').placeholder = ph || '例如: 0.05';
+        }
+
+        // 如果已有 lastExchangeRate，轉 mode 時要轉換顯示
+        if (lastExchangeRate) {
+            // lastExchangeRate 永遠以 mode B 存 (1 當地 = ? HKD)
+            if (mode === 'B') {
+                document.getElementById('exchangeRateInput').value = lastExchangeRate;
+            } else {
+                // A = 1 / B
+                document.getElementById('exchangeRateInput').value = (1 / lastExchangeRate).toFixed(4);
+            }
+        }
+    }
+
+    function updateRatePlaceholder() {
+        const currency = getSelectedCurrency();
+        const ph = RATE_PLACEHOLDERS[currency] || '';
+        const phA = RATE_PLACEHOLDERS_A[currency] || '';
+        if (currentRateMode === 'B') {
+            document.getElementById('exchangeRateInput').placeholder = ph || '例如: 0.05';
+        } else {
+            document.getElementById('exchangeRateInput').placeholder = phA || '例如: 4';
+        }
+    }
+
     function applyExchangeRate() {
-        const rate = parseFloat(document.getElementById('exchangeRateInput').value);
-        if (isNaN(rate) || rate <= 0) { alert('請輸入有效匯率'); return; }
+        const rawVal = parseFloat(document.getElementById('exchangeRateInput').value);
+        if (isNaN(rawVal) || rawVal <= 0) { alert('請輸入有效匯率'); return; }
         document.getElementById('exchangeRateModal').style.display = 'none';
 
-        lastExchangeRate = rate;
+        // 統一存做 mode B (1 當地 = ? HKD)
+        let rateB;
+        if (currentRateMode === 'A') {
+            // A = 1 HKD = ? 當地 → B = 1 / A
+            rateB = 1 / rawVal;
+        } else {
+            rateB = rawVal;
+        }
+
+        lastExchangeRate = rateB;
         const mode = document.getElementById('exchangeRateModal').dataset.mode;
 
         // 儲存匯率到 Firestore
         if (db) {
             const h = window.firebaseHelpers;
             h.setDoc(h.doc(db, 'trips', currentTripId, 'settings', 'config'),
-                { lastExchangeRate: rate }, { merge: true }).catch(e => console.error(e));
+                { lastExchangeRate: rateB }, { merge: true }).catch(e => console.error(e));
         }
 
         if (mode === 'report') {
-            _generateFullReport(pendingReportType, rate);
+            _generateFullReport(pendingReportType, rateB);
         } else if (mode === 'excel') {
-            _exportToExcel(rate);
+            _exportToExcel(rateB);
         }
+    }
+
+    // Helper: 計算每筆消費嘅 HKD 值
+    function getExpenseHkd(e, exchangeRate) {
+        if (e.currency === 'HKD') return e.amount;
+        // 事前當地貨幣有 actualHkd 就用
+        if (e.actualHkd) return e.actualHkd;
+        // 否則用匯率
+        return e.amount * (exchangeRate || 0);
     }
 
     function _generateFullReport(type, exchangeRate) {
         const currency = getSelectedCurrency();
+        reportIsOpen = true;
 
         // 1. 篩選
         let filtered = expenses.filter(e => {
@@ -1275,28 +1572,33 @@
             return true;
         });
 
-        // 2. 分開計事前同當地總額
+        // 2. 分開計事前同當地總額 (全部轉 HKD)
         let totalPreHkd = 0, totalLocalOriginal = 0, totalLocalHkd = 0;
         filtered.forEach(e => {
+            const hkdVal = getExpenseHkd(e, exchangeRate);
             if (e.stage === '事前預訂') {
-                totalPreHkd += (e.currency === 'HKD' ? e.amount : (e.amount * (exchangeRate || 0)));
+                totalPreHkd += hkdVal;
             } else {
                 totalLocalOriginal += e.amount;
-                if (exchangeRate) totalLocalHkd += (e.amount * exchangeRate);
+                totalLocalHkd += hkdVal;
             }
         });
 
-        let grandTotalHkd = totalPreHkd + (exchangeRate ? totalLocalHkd : 0);
+        let grandTotalHkd = totalPreHkd + totalLocalHkd;
 
-        // 3. 結餘
+        // 3. 結餘 (全部轉 HKD 計)
         const balance = {};
-        members.forEach(m => balance[m] = 0);
+        const balanceOriginal = {}; // 原幣結餘 (for local 顯示)
+        members.forEach(m => { balance[m] = 0; balanceOriginal[m] = 0; });
 
         filtered.forEach(e => {
-            balance[e.payer] += e.amount;
+            const hkdVal = getExpenseHkd(e, exchangeRate);
+            balance[e.payer] += hkdVal;
+            balanceOriginal[e.payer] += e.amount;
             (e.sharedWith || []).forEach(p => {
                 if (e.splitDetails && e.splitDetails[p] !== undefined) {
-                    balance[p] -= e.splitDetails[p];
+                    balance[p] -= getExpenseHkd({ ...e, amount: e.splitDetails[p] }, exchangeRate);
+                    balanceOriginal[p] -= e.splitDetails[p];
                 }
             });
         });
@@ -1304,7 +1606,7 @@
         const creditors = [], debtors = [];
         members.forEach(m => {
             const b = balance[m];
-            if (Math.abs(b) < 0.001) {
+            if (Math.abs(b) < 0.01) {
                 balance[m] = 0;
             } else if (b > 0) {
                 creditors.push({ name: m, amount: b });
@@ -1315,7 +1617,7 @@
         creditors.sort((a, b) => b.amount - a.amount);
         debtors.sort((a, b) => b.amount - a.amount);
 
-        // 還款方案
+        // 還款方案 (全部 HKD)
         const transactions = [];
         {
             let i = 0, j = 0;
@@ -1327,17 +1629,18 @@
                 transactions.push({ from: d.name, to: c.name, amount: amt });
                 d.amount -= amt;
                 c.amount -= amt;
-                if (d.amount < 0.001) i++;
-                if (c.amount < 0.001) j++;
+                if (d.amount < 0.01) i++;
+                if (c.amount < 0.01) j++;
             }
         }
 
         let title = type === 'pre' ? '💻 事前預訂 (HKD)'
-            : type === 'local' ? '📍 當地消費 (原幣)'
+            : type === 'local' ? '📍 當地消費'
             : '🌍 全部 Total';
 
         // ========== Summary Box ==========
         let html = `<div class="summary-box">
+            <button class="close-report-btn" onclick="closeReport()">❌ 收埋</button>
             <h3 style="margin-top:0;color:white;">📊 總結表 - ${title}</h3>`;
 
         if (type === 'pre') {
@@ -1358,12 +1661,12 @@
         }
         html += `</div>`;
 
-        // ========== 類別分析 ==========
+        // ========== 類別分析 (全部轉 HKD) ==========
         html += `<h3 style="font-size:15px;">📈 類別分析</h3>`;
         const catTotalHkd = {};
         filtered.forEach(e => {
-            let hkd = e.currency === 'HKD' ? e.amount : (e.amount * (exchangeRate || 0));
-            catTotalHkd[e.category] = (catTotalHkd[e.category] || 0) + hkd;
+            const hkdVal = getExpenseHkd(e, exchangeRate);
+            catTotalHkd[e.category] = (catTotalHkd[e.category] || 0) + hkdVal;
         });
         const catSum = Object.values(catTotalHkd).reduce((a, b) => a + b, 0);
 
@@ -1392,15 +1695,15 @@
         members.forEach(m => {
             const bal = balance[m];
             let display = '';
-            if (type === 'pre') {
-                display = `HKD $${Math.abs(bal * (exchangeRate || 1)).toFixed(2)}`;
-            } else if (type === 'local') {
-                display = `${currency} $${Math.abs(bal).toFixed(2)}`;
-            } else {
-                display = `HKD $${Math.abs(bal * (exchangeRate || 1)).toFixed(2)}`;
+            if (type === 'local') {
+                // 當地報表：顯示原幣 (如果有匯率都顯示 HKD)
+                display = `${currency} $${Math.abs(balanceOriginal[m]).toFixed(2)}`;
                 if (exchangeRate) {
-                    display += ` (≈ ${currency} $${Math.abs(bal).toFixed(2)})`;
+                    display += `<br><span style="font-size:12px;">HKD $${Math.abs(bal).toFixed(2)}</span>`;
                 }
+            } else {
+                // pre / total: 全部 HKD
+                display = `HKD $${Math.abs(bal).toFixed(2)}`;
             }
             const status = bal > 0 ? '收' : bal < 0 ? '俾' : '-';
             const cls = bal > 0 ? 'balance-positive' : bal < 0 ? 'balance-negative' : '';
@@ -1408,23 +1711,13 @@
         });
         html += `</table></div>`;
 
-        // ========== 還款方案 ==========
+        // ========== 還款方案 (統一 HKD) ==========
         html += `<h3 style="font-size:15px;">💸 還款方案</h3><div class="table-wrapper"><table><tr><th>邊個俾邊個</th><th style="text-align:right;">金額</th><th style="text-align:center;">已結算</th></tr>`;
         if (!transactions.length) {
             html += '<tr><td colspan="3" style="text-align:center;">✅ 無數找</td></tr>';
         } else {
             transactions.forEach(t => {
-                let display = '';
-                if (type === 'pre') {
-                    display = `HKD $${(t.amount * (exchangeRate || 1)).toFixed(2)}`;
-                } else if (type === 'local') {
-                    display = `${currency} $${t.amount.toFixed(2)}`;
-                } else {
-                    display = `HKD $${(t.amount * (exchangeRate || 1)).toFixed(2)}`;
-                    if (exchangeRate) {
-                        display += ` (≈ ${currency} $${t.amount.toFixed(2)})`;
-                    }
-                }
+                const display = `HKD $${t.amount.toFixed(2)}`;
                 const settledKey = `${t.from}|${t.to}`;
                 const isSettled = settledTransactions[settledKey];
                 const rowClass = isSettled ? 'settled-row' : '';
@@ -1441,44 +1734,118 @@
         html += `</table></div>`;
 
         document.getElementById('resultArea').innerHTML = html;
-        document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
+        // 只喺第一次主動撳時先 scroll
+        if (!reportIsOpen) {
+            document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
+        }
     }
 
     // =============================================
-    // Excel 匯出
+    // Excel 匯出 (多分頁)
     // =============================================
     function exportToExcel() {
         if (!expenses.length) { alert('未有資料'); return; }
         if (typeof XLSX === 'undefined') { alert('Excel 組件載入中'); return; }
 
         const currency = getSelectedCurrency();
-        document.getElementById('baseCurrencyLabel').textContent = currency;
-        document.getElementById('exchangeRateInput').value = lastExchangeRate || '';
-        const hint = document.getElementById('lastRateHint');
-        if (lastExchangeRate) {
-            hint.textContent = `上次匯率: 1 ${currency} = ${lastExchangeRate} HKD`;
-            hint.style.display = 'block';
+        const hasLocal = expenses.some(e => e.stage !== '事前預訂');
+        const hasPreLocalCurrency = expenses.some(e => e.stage === '事前預訂' && e.currency !== 'HKD' && !e.actualHkd);
+
+        if (hasLocal || hasPreLocalCurrency) {
+            openExchangeRateModal('excel');
         } else {
-            hint.style.display = 'none';
+            _exportToExcel(null);
         }
-        document.getElementById('exchangeRateModal').dataset.mode = 'excel';
-        document.getElementById('exchangeRateModal').style.display = 'flex';
     }
 
     function _exportToExcel(exchangeRate) {
         const currency = getSelectedCurrency();
         const wb = XLSX.utils.book_new();
-        const hdr = ['日期', '階段', '類別', '描述', '付款人', '金額', '幣種', '港幣結算', '付款方式', '參與者'];
-        const data = [hdr];
-        expenses.sort((a, b) => new Date(a.date) - new Date(b.date)).forEach(e => {
-            data.push([
+        const sortedExpenses = [...expenses].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // ===== Sheet 1: 消費明細 =====
+        const detailHdr = ['日期', '階段', '類別', '描述', '付款人', '金額', '幣種', '港幣結算', '付款方式', '參與者'];
+        const detailData = [detailHdr];
+        sortedExpenses.forEach(e => {
+            const hkdVal = getExpenseHkd(e, exchangeRate);
+            detailData.push([
                 e.date, e.stage, e.category, e.desc, e.payer, e.amount, e.currency,
-                e.currency === 'HKD' ? e.amount : (e.amount * exchangeRate).toFixed(2),
+                hkdVal.toFixed(2),
                 e.paymentMethod || '現金',
                 (e.sharedWith || []).join(', ')
             ]);
         });
-        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(data), "消費明細");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(detailData), "消費明細");
+
+        // ===== Sheet 2: 結餘總結 =====
+        const balance = {};
+        members.forEach(m => balance[m] = 0);
+        sortedExpenses.forEach(e => {
+            const hkdVal = getExpenseHkd(e, exchangeRate);
+            balance[e.payer] += hkdVal;
+            (e.sharedWith || []).forEach(p => {
+                if (e.splitDetails && e.splitDetails[p] !== undefined) {
+                    balance[p] -= getExpenseHkd({ ...e, amount: e.splitDetails[p] }, exchangeRate);
+                }
+            });
+        });
+        const balanceHdr = ['團友', '結餘 (HKD)', '狀態'];
+        const balanceData = [balanceHdr];
+        members.forEach(m => {
+            const b = balance[m];
+            const status = b > 0.01 ? '收' : b < -0.01 ? '俾' : '平';
+            balanceData.push([m, b.toFixed(2), status]);
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(balanceData), "結餘總結");
+
+        // ===== Sheet 3: 還款方案 =====
+        const creditors = [], debtors = [];
+        members.forEach(m => {
+            const b = balance[m];
+            if (b > 0.01) creditors.push({ name: m, amount: b });
+            else if (b < -0.01) debtors.push({ name: m, amount: -b });
+        });
+        creditors.sort((a, b) => b.amount - a.amount);
+        debtors.sort((a, b) => b.amount - a.amount);
+
+        const txnHdr = ['由', '俾', '金額 (HKD)', '已結算'];
+        const txnData = [txnHdr];
+        let i = 0, j = 0;
+        const dCopy = debtors.map(d => ({ ...d }));
+        const cCopy = creditors.map(c => ({ ...c }));
+        while (i < dCopy.length && j < cCopy.length) {
+            const d = dCopy[i], c = cCopy[j];
+            const amt = Math.min(d.amount, c.amount);
+            const settledKey = `${d.name}|${c.name}`;
+            const isSettled = settledTransactions[settledKey] ? '是' : '';
+            txnData.push([d.name, c.name, amt.toFixed(2), isSettled]);
+            d.amount -= amt;
+            c.amount -= amt;
+            if (d.amount < 0.01) i++;
+            if (c.amount < 0.01) j++;
+        }
+        if (txnData.length === 1) {
+            txnData.push(['', '', '✅ 無數找', '']);
+        }
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txnData), "還款方案");
+
+        // ===== Sheet 4: 類別分析 =====
+        const catTotal = {};
+        sortedExpenses.forEach(e => {
+            const hkdVal = getExpenseHkd(e, exchangeRate);
+            catTotal[e.category] = (catTotal[e.category] || 0) + hkdVal;
+        });
+        const catSum = Object.values(catTotal).reduce((a, b) => a + b, 0);
+        const catHdr = ['類別', '金額 (HKD)', '百分比'];
+        const catData = [catHdr];
+        Object.entries(catTotal).sort((a, b) => b[1] - a[1]).forEach(([cat, amt]) => {
+            const pct = catSum > 0 ? (amt / catSum * 100).toFixed(1) + '%' : '0%';
+            catData.push([cat, amt.toFixed(2), pct]);
+        });
+        catData.push(['', '', '']);
+        catData.push(['總計', catSum.toFixed(2), '100%']);
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catData), "類別分析");
+
         XLSX.writeFile(wb, `旅行分賬_${currentTripId}_${today}.xlsx`);
     }
 
@@ -1537,7 +1904,7 @@
         }
         expenses = [];
         renderExpenseList();
-        document.getElementById('resultArea').innerHTML = '';
+        closeReport();
     }
 
     async function clearAllData() {
