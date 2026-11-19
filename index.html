@@ -166,8 +166,10 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h2 style="margin: 0;">🏠 我的旅程</h2>
             <select id="sortSelect" class="sort-select" onchange="renderTripList()">
-                <option value="tripDate">日期排序</option>
-                <option value="lastUpdated">最後更新</option>
+                <option value="tripDate-desc">日期 ↓ 近到遠</option>
+                <option value="tripDate-asc">日期 ↑ 遠到近</option>
+                <option value="lastUpdated-desc">更新 ↓ 近到遠</option>
+                <option value="lastUpdated-asc">更新 ↑ 遠到近</option>
             </select>
         </div>
         <div id="tripList"></div>
@@ -453,16 +455,16 @@
             return;
         }
 
-        const sortBy = sortSelect ? sortSelect.value : 'tripDate';
+        const sortBy = sortSelect ? sortSelect.value : 'tripDate-desc';
         list.sort((a, b) => {
-            if (sortBy === 'lastUpdated') {
+            if (sortBy.startsWith('lastUpdated')) {
                 const ta = homeDataCache[a]?.lastUpdated || '';
                 const tb = homeDataCache[b]?.lastUpdated || '';
-                return tb.localeCompare(ta);
+                return sortBy.endsWith('asc') ? ta.localeCompare(tb) : tb.localeCompare(ta);
             } else {
                 const da = homeDataCache[a]?.tripStartDate || '9999';
                 const db2 = homeDataCache[b]?.tripStartDate || '9999';
-                return da.localeCompare(db2);
+                return sortBy.endsWith('asc') ? da.localeCompare(db2) : db2.localeCompare(da);
             }
         });
 
@@ -778,8 +780,8 @@
             snap.forEach(d => expenses.push({ ...d.data(), id: d.id }));
             updateFilterDate();
             renderExpenseList();
-            // 靜默更新總結表，唔 scroll
-            if (reportIsOpen) {
+            // 靜默更新總結表，但唔好喺 modal 開住時覆蓋
+            if (reportIsOpen && !isAnyModalOpen()) {
                 _generateFullReport(pendingReportType, lastExchangeRate);
             }
             updateTripInfo();
@@ -804,7 +806,7 @@
 
         unsubscribeSettled = h.onSnapshot(h.doc(db, 'trips', currentTripId, 'settings', 'settled'), (snap) => {
             settledTransactions = snap.exists() ? snap.data().transactions || {} : {};
-            if (reportIsOpen) {
+            if (reportIsOpen && !isAnyModalOpen()) {
                 _generateFullReport(pendingReportType, lastExchangeRate);
             }
         });
@@ -1317,17 +1319,27 @@
 
             localDates.forEach(date => {
                 const dayExpenses = localByDate[date];
-                const dayTotal = dayExpenses.reduce((s, x) => s + x.amount, 0);
+                // 分開貨幣計小計
+                const totalsByCurrency = {};
+                dayExpenses.forEach(x => {
+                    const cur = x.currency || getSelectedCurrency();
+                    if (!totalsByCurrency[cur]) totalsByCurrency[cur] = 0;
+                    totalsByCurrency[cur] += x.amount;
+                });
                 const dayKey = `${stageKey}-${date}`;
                 // 最新日期預設展開
                 const dayExpanded = expandedDays[dayKey] !== undefined
                     ? expandedDays[dayKey]
                     : (date === localLatestDate);
 
+                const totalStr = Object.entries(totalsByCurrency)
+                    .map(([cur, val]) => `${cur} $${val.toFixed(2)}`)
+                    .join(' + ');
+
                 html += `<div class="day-header ${dayExpanded ? 'expanded' : ''}" onclick="toggleDaySection('${stageKey}','${date}')">
                     <span class="arrow">▶</span>
                     <strong>📅 ${date}</strong>
-                    <span class="day-total">${dayExpenses[0].currency} $${dayTotal.toFixed(2)}</span>
+                    <span class="day-total">${totalStr}</span>
                 </div>
                 <div class="day-content ${dayExpanded ? 'show' : ''}">`;
 
@@ -1361,14 +1373,25 @@
 
             preDates.forEach(date => {
                 const dayExpenses = preByDate[date];
-                const dayTotal = dayExpenses.reduce((s, x) => s + x.amount, 0);
+                // 分開貨幣計小計
+                const totalsByCurrency = {};
+                dayExpenses.forEach(x => {
+                    const cur = x.currency || 'HKD';
+                    if (!totalsByCurrency[cur]) totalsByCurrency[cur] = 0;
+                    totalsByCurrency[cur] += x.amount;
+                });
                 const dayKey = `${stageKey}-${date}`;
                 const dayExpanded = expandedDays[dayKey] === true; // 預設收合
+
+                // 顯示每種貨幣嘅小計
+                const totalStr = Object.entries(totalsByCurrency)
+                    .map(([cur, val]) => `${cur} $${val.toFixed(2)}`)
+                    .join(' + ');
 
                 html += `<div class="day-header ${dayExpanded ? 'expanded' : ''}" onclick="toggleDaySection('${stageKey}','${date}')">
                     <span class="arrow">▶</span>
                     <strong>📅 ${date}</strong>
-                    <span class="day-total">${dayExpenses[0].currency} $${dayTotal.toFixed(2)}</span>
+                    <span class="day-total">${totalStr}</span>
                 </div>
                 <div class="day-content ${dayExpanded ? 'show' : ''}">`;
 
@@ -1422,6 +1445,14 @@
     function closeReport() {
         reportIsOpen = false;
         document.getElementById('resultArea').innerHTML = '';
+    }
+
+    function isAnyModalOpen() {
+        const modals = document.querySelectorAll('.modal-overlay');
+        for (const m of modals) {
+            if (m.style.display === 'flex') return true;
+        }
+        return false;
     }
 
     function selectReportRange(type) {
@@ -1563,6 +1594,7 @@
 
     function _generateFullReport(type, exchangeRate) {
         const currency = getSelectedCurrency();
+        const wasAlreadyOpen = reportIsOpen;
         reportIsOpen = true;
 
         // 1. 篩選
@@ -1572,7 +1604,7 @@
             return true;
         });
 
-        // 2. 分開計事前同當地總額 (全部轉 HKD)
+        // 2. 分開計事前同當地總額
         let totalPreHkd = 0, totalLocalOriginal = 0, totalLocalHkd = 0;
         filtered.forEach(e => {
             const hkdVal = getExpenseHkd(e, exchangeRate);
@@ -1586,21 +1618,33 @@
 
         let grandTotalHkd = totalPreHkd + totalLocalHkd;
 
-        // 3. 結餘 (全部轉 HKD 計)
+        // 3. 結餘計算
+        // local 報表用原幣計；pre / total 用 HKD 計
+        const useOriginal = (type === 'local');
         const balance = {};
-        const balanceOriginal = {}; // 原幣結餘 (for local 顯示)
-        members.forEach(m => { balance[m] = 0; balanceOriginal[m] = 0; });
+        members.forEach(m => { balance[m] = 0; });
 
         filtered.forEach(e => {
-            const hkdVal = getExpenseHkd(e, exchangeRate);
-            balance[e.payer] += hkdVal;
-            balanceOriginal[e.payer] += e.amount;
-            (e.sharedWith || []).forEach(p => {
-                if (e.splitDetails && e.splitDetails[p] !== undefined) {
-                    balance[p] -= getExpenseHkd({ ...e, amount: e.splitDetails[p] }, exchangeRate);
-                    balanceOriginal[p] -= e.splitDetails[p];
-                }
-            });
+            if (useOriginal) {
+                // 當地報表：用原幣金額計
+                balance[e.payer] += e.amount;
+                (e.sharedWith || []).forEach(p => {
+                    if (e.splitDetails && e.splitDetails[p] !== undefined) {
+                        balance[p] -= e.splitDetails[p];
+                    }
+                });
+            } else {
+                // pre / total 報表：用 HKD 計
+                const hkdVal = getExpenseHkd(e, exchangeRate);
+                balance[e.payer] += hkdVal;
+                (e.sharedWith || []).forEach(p => {
+                    if (e.splitDetails && e.splitDetails[p] !== undefined) {
+                        // 按比例計分攤 HKD：每人分攤 = splitDetails[p] / amount * hkdVal
+                        const ratio = e.amount > 0 ? e.splitDetails[p] / e.amount : 0;
+                        balance[p] -= hkdVal * ratio;
+                    }
+                });
+            }
         });
 
         const creditors = [], debtors = [];
@@ -1617,7 +1661,7 @@
         creditors.sort((a, b) => b.amount - a.amount);
         debtors.sort((a, b) => b.amount - a.amount);
 
-        // 還款方案 (全部 HKD)
+        // 還款方案
         const transactions = [];
         {
             let i = 0, j = 0;
@@ -1633,6 +1677,15 @@
                 if (c.amount < 0.01) j++;
             }
         }
+
+        // 金額顯示格式 helper
+        const fmtMoney = (amt) => {
+            if (useOriginal) {
+                return `${currency} $${amt.toFixed(2)}`;
+            } else {
+                return `HKD $${amt.toFixed(2)}`;
+            }
+        };
 
         let title = type === 'pre' ? '💻 事前預訂 (HKD)'
             : type === 'local' ? '📍 當地消費'
@@ -1661,14 +1714,14 @@
         }
         html += `</div>`;
 
-        // ========== 類別分析 (全部轉 HKD) ==========
+        // ========== 類別分析 ==========
         html += `<h3 style="font-size:15px;">📈 類別分析</h3>`;
-        const catTotalHkd = {};
+        const catTotal = {};
         filtered.forEach(e => {
-            const hkdVal = getExpenseHkd(e, exchangeRate);
-            catTotalHkd[e.category] = (catTotalHkd[e.category] || 0) + hkdVal;
+            const val = useOriginal ? e.amount : getExpenseHkd(e, exchangeRate);
+            catTotal[e.category] = (catTotal[e.category] || 0) + val;
         });
-        const catSum = Object.values(catTotalHkd).reduce((a, b) => a + b, 0);
+        const catSum = Object.values(catTotal).reduce((a, b) => a + b, 0);
 
         if (catSum > 0) {
             const colors = {
@@ -1676,14 +1729,15 @@
                 '便利店': '#795548', '其他': '#9E9E9E', '機票': '#0D47A1', '酒店': '#004D40',
                 '網上Booking': '#4A148C', '事前其他': '#F57F17'
             };
-            Object.entries(catTotalHkd).sort((a, b) => b[1] - a[1]).forEach(([cat, amt]) => {
+            const catLabel = useOriginal ? currency : 'HKD';
+            Object.entries(catTotal).sort((a, b) => b[1] - a[1]).forEach(([cat, amt]) => {
                 const pct = (amt / catSum * 100).toFixed(1);
                 const cleanCat = cat.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '');
                 const color = colors[cleanCat] || '#999';
                 html += `<div class="category-stat">
                     <span style="min-width:60px;">${escapeHtml(cat)}</span>
                     <div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${color};"></div></div>
-                    <span style="min-width:80px; text-align:right;">HKD $${amt.toFixed(2)} (${pct}%)</span>
+                    <span style="min-width:80px; text-align:right;">${catLabel} $${amt.toFixed(2)} (${pct}%)</span>
                 </div>`;
             });
         } else {
@@ -1694,15 +1748,13 @@
         html += `<h3 style="font-size:15px;">👤 結餘</h3><div class="table-wrapper"><table><tr><th>團友</th><th>結餘</th></tr>`;
         members.forEach(m => {
             const bal = balance[m];
-            let display = '';
-            if (type === 'local') {
-                // 當地報表：顯示原幣 (如果有匯率都顯示 HKD)
-                display = `${currency} $${Math.abs(balanceOriginal[m]).toFixed(2)}`;
+            let display;
+            if (useOriginal) {
+                display = `${currency} $${Math.abs(bal).toFixed(2)}`;
                 if (exchangeRate) {
-                    display += `<br><span style="font-size:12px;">HKD $${Math.abs(bal).toFixed(2)}</span>`;
+                    display += `<br><span style="font-size:12px;">HKD $${(Math.abs(bal) * exchangeRate).toFixed(2)}</span>`;
                 }
             } else {
-                // pre / total: 全部 HKD
                 display = `HKD $${Math.abs(bal).toFixed(2)}`;
             }
             const status = bal > 0 ? '收' : bal < 0 ? '俾' : '-';
@@ -1711,13 +1763,13 @@
         });
         html += `</table></div>`;
 
-        // ========== 還款方案 (統一 HKD) ==========
+        // ========== 還款方案 ==========
         html += `<h3 style="font-size:15px;">💸 還款方案</h3><div class="table-wrapper"><table><tr><th>邊個俾邊個</th><th style="text-align:right;">金額</th><th style="text-align:center;">已結算</th></tr>`;
         if (!transactions.length) {
             html += '<tr><td colspan="3" style="text-align:center;">✅ 無數找</td></tr>';
         } else {
             transactions.forEach(t => {
-                const display = `HKD $${t.amount.toFixed(2)}`;
+                const display = fmtMoney(t.amount);
                 const settledKey = `${t.from}|${t.to}`;
                 const isSettled = settledTransactions[settledKey];
                 const rowClass = isSettled ? 'settled-row' : '';
@@ -1734,8 +1786,8 @@
         html += `</table></div>`;
 
         document.getElementById('resultArea').innerHTML = html;
-        // 只喺第一次主動撳時先 scroll
-        if (!reportIsOpen) {
+        // 只喺第一次開時先 scroll
+        if (!wasAlreadyOpen) {
             document.getElementById('resultArea').scrollIntoView({ behavior: 'smooth' });
         }
     }
@@ -1785,7 +1837,9 @@
             balance[e.payer] += hkdVal;
             (e.sharedWith || []).forEach(p => {
                 if (e.splitDetails && e.splitDetails[p] !== undefined) {
-                    balance[p] -= getExpenseHkd({ ...e, amount: e.splitDetails[p] }, exchangeRate);
+                    // 按比例計分攤 HKD
+                    const ratio = e.amount > 0 ? e.splitDetails[p] / e.amount : 0;
+                    balance[p] -= hkdVal * ratio;
                 }
             });
         });
@@ -1845,6 +1899,36 @@
         catData.push(['', '', '']);
         catData.push(['總計', catSum.toFixed(2), '100%']);
         XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catData), "類別分析");
+
+        // ===== Sheet 5: 當地每日消費 =====
+        const localExpenses = sortedExpenses.filter(e => e.stage !== '事前預訂');
+        if (localExpenses.length) {
+            const localByDate = {};
+            localExpenses.forEach(e => {
+                if (!localByDate[e.date]) localByDate[e.date] = [];
+                localByDate[e.date].push(e);
+            });
+            const dailyHdr = ['日期', '描述', '類別', '付款人', '金額', '幣種', '付款方式', '參與者'];
+            const dailyData = [dailyHdr];
+            Object.keys(localByDate).sort().forEach(date => {
+                const dayExpenses = localByDate[date];
+                let dayTotalOrig = 0;
+                dayExpenses.forEach(e => {
+                    dayTotalOrig += e.amount;
+                    dailyData.push([
+                        e.date, e.desc, e.category, e.payer, e.amount, e.currency,
+                        e.paymentMethod || '現金',
+                        (e.sharedWith || []).join(', ')
+                    ]);
+                });
+                // 每日小計行
+                dailyData.push([
+                    `${date} 小計`, '', '', '', dayTotalOrig, currency, '', ''
+                ]);
+                dailyData.push(['', '', '', '', '', '', '', '']); // 空行分隔
+            });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(dailyData), "當地每日");
+        }
 
         XLSX.writeFile(wb, `旅行分賬_${currentTripId}_${today}.xlsx`);
     }
